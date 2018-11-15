@@ -1,0 +1,439 @@
+ GLOBAL INFORMATION
+   END_TIME = '2012/05/01  1:00:00'  -- comments can be added here if desired
+   -- RESTART_DIR = 'none'
+   TIME_STEP_SECONDS = 300.
+ 
+   -- deactivation logicals ---
+   REACHED_OPEN_BOUNDARY = 'true'
+   REACHED_FLOW_BOUNDARY = 'true'
+   ENTRAINED_BY_VOLUME_SINK = 'true'
+   CROSSED_LINE = 'false'
+   DEPOSITED_ON_BED = 'false'
+   CONSOLIDATED_ON_BED = 'false'
+ 
+    -- kill logicals ---
+   REACHED_OPEN_BOUNDARY = 'false'
+   REACHED_FLOW_BOUNDARY = 'false'
+   ENTRAINED_BY_VOLUME_SINK = 'false'
+   CROSSED_LINE = 'false'
+   DEPOSITED_ON_BED = 'false'
+   CONSOLIDATED_ON_BED = 'false'
+ 
+   -- line information --- 
+   NLINES = 0
+
+ TRANSECT INFORMATION -- applies to tidal surfing
+   NTRANSECTS = 8
+
+       -- transect 1 ---
+     TRANSECT = 'false_river'
+     TRANSECT_FILE = 'false_river.tra'
+
+     -- transect 2 ---
+     TRANSECT = 'mokelumne_river'
+     TRANSECT_FILE = 'mokelumne_river.tra'
+
+     -- transect 3 ---
+     TRANSECT = 'sacramento'
+     TRANSECT_FILE = 'sacramento.tra'
+
+     -- transect 4 ---
+     TRANSECT = 'mainstem_sac'
+     TRANSECT_FILE = 'mainstem_sac.tra'
+
+     -- transect 5 ---
+     TRANSECT = 'san_joaquin'
+     TRANSECT_FILE = 'san_joaquin.tra'
+
+     -- transect 6 ---
+     TRANSECT = 'middle_river'
+     TRANSECT_FILE = 'middle_river.tra'
+
+     -- transect 7 ---
+     TRANSECT = 'suisun_carquinez'
+     TRANSECT_FILE = 'suisun_carquinez.tra'
+
+     -- transect 8 ---
+     TRANSECT = 'san_pablo_and_central'
+     TRANSECT_FILE = 'san_pablo_and_central.tra'
+
+ REGION INFORMATION
+   NREGIONS = 23
+
+     -- region  1 --- 
+     REGION = 'Central_Delta_and_Franks_Tract'
+     REGION_POLYGON_FILE = 'Central_Delta_and_Franks_Tract.pol'
+
+     -- region  2 --- 
+     REGION = 'Upper_Sacramento_River'
+     REGION_POLYGON_FILE = 'Upper_Sacramento_River.pol'
+
+     -- region  3 --- 
+     REGION = 'North_and_South_Forks_Mokelumne_River'
+     REGION_POLYGON_FILE = 'North_and_South_Forks_Mokelumne_River.pol'
+
+     -- region  4 --- 
+     REGION = 'South_Delta'
+     REGION_POLYGON_FILE = 'South_Delta.pol'
+
+     -- region  5 --- 
+     REGION = 'Cache_Slough_Complex'
+     REGION_POLYGON_FILE = 'Cache_Slough_Complex.pol'
+
+     -- region  6 --- 
+     REGION = 'Confluence'
+     REGION_POLYGON_FILE = 'Confluence.pol'
+
+     -- region  7 --- 
+     REGION = 'Suisun_Bay'
+     REGION_POLYGON_FILE = 'Suisun_Bay.pol'
+
+     -- region  8 --- 
+     REGION = 'Carquinez_Strait'
+     REGION_POLYGON_FILE = 'Carquinez_Strait.pol'
+
+     -- region  9 --- 
+     REGION = 'Suisun_Marsh'
+     REGION_POLYGON_FILE = 'Suisun_Marsh.pol'
+
+     -- region 10 --- 
+     REGION = 'San_Pablo_Bay'
+     REGION_POLYGON_FILE = 'San_Pablo_Bay.pol'
+
+     -- region 11 --- 
+     REGION = 'Petaluma'
+     REGION_POLYGON_FILE = 'Petaluma.pol'
+
+     -- region 12 --- 
+     REGION = 'South_SF_Bay'
+     REGION_POLYGON_FILE = 'South_SF_Bay.pol'
+
+     -- region 13 --- 
+     REGION = 'Central_SF_Bay'
+     REGION_POLYGON_FILE = 'Central_SF_Bay.pol'
+
+     -- region 14 --- 
+     REGION = 'Lower_South_SF_Bay'
+     REGION_POLYGON_FILE = 'Lower_South_SF_Bay.pol'
+
+     -- region 15 --- 
+     REGION = 'Napa_Sonoma'
+     REGION_POLYGON_FILE = 'Napa_Sonoma.pol'
+
+     -- surfing regions ---
+     -- region 16 ---
+     REGION = 'central_delta'
+     REGION_POLYGON_FILE = 'central_delta.pol'
+  
+     -- region 17 ---
+     REGION = 'east_delta'
+     REGION_POLYGON_FILE = 'east_delta.pol'
+  
+     -- region 18 ---
+     REGION = 'lower_sacramento_surf'
+     REGION_POLYGON_FILE = 'lower_sacramento_surf.pol'
+  
+     -- region 19 ---
+     REGION = 'mainstem_sac'
+     REGION_POLYGON_FILE = 'mainstem_sac.pol'
+  
+     -- region 20 ---
+     REGION = 'san_joaquin'
+     REGION_POLYGON_FILE = 'san_joaquin.pol'
+  
+     -- region 21 ---
+     REGION = 'south_delta'
+     REGION_POLYGON_FILE = 'south_delta.pol'
+  
+     -- region 22 ---
+     REGION = 'suisun_carquinez'
+     REGION_POLYGON_FILE = 'suisun_carquinez.pol'
+
+     -- region 23 ---
+     REGION = 'san_pablo_and_central'
+     REGION_POLYGON_FILE = 'san_pablo_and_central.pol'
+
+ RELEASE DISTRIBUTION INFORMATION
+   NRELEASE_DISTRIBUTION_SETS = 1
+   -- release distribution set 1 ---
+   RELEASE_DISTRIBUTION_SET = 'region_release'
+   MIN_BED_ELEVATION_METERS = -999.
+   MAX_BED_ELEVATION_METERS = 999.
+   HORIZONTAL_DISTRIBUTION = 'region'
+     DISTRIBUTION_IN_REGION = 'spacing'
+       HORIZONTAL_SPACING_TYPE = 'calculate'
+       TARGET_NUMBER_OF_PARTICLES = 20000
+       VERTICAL_SPACING = 1.0
+       ZMIN_DIM = -999.0 -- not used
+       ZMAX_DISTANCE_BELOW_SURFACE = 0.0 -- not used
+   ZMIN_NON_DIM = 0.0
+   ZMAX_NON_DIM = 1.0
+   VERT_SPACING = 'uniform'
+  
+  -- add region releases from camt input files
+  
+ RELEASE TIMING INFORMATION
+   NRELEASE_TIMING_SETS = 1
+
+   -- release timing set 1 ---        
+   RELEASE_TIMING_SET = 'Feb1_release'
+   INITIAL_RELEASE_TIME = '2012/02/01 12:00:00'  
+   RELEASE_TIMING = 'single'
+   INACTIVATION_TIME = 'none'
+
+ BEHAVIOR INFORMATION
+   NBEHAVIOR_PROFILES = 5
+
+     -- profile set 1 ---
+     BEHAVIOR_PROFILE = 'passive'
+     BEHAVIOR_PROFILE_FILENAME = 'passive.inp'
+
+     -- profile set 2 ---
+     BEHAVIOR_PROFILE = 'swim_down_0.5mm_per_s_profile'
+     BEHAVIOR_PROFILE_FILENAME = 'swim_down_0.5mm_per_s_profile.inp'
+
+     -- profile set 3 ---
+     BEHAVIOR_PROFILE = 'swim_up_0.5mm_per_s_profile'
+     BEHAVIOR_PROFILE_FILENAME = 'swim_up_0.5mm_per_s_profile.inp'  
+
+     -- profile set 4 ---
+     BEHAVIOR_PROFILE = 'swim_down_1mm_per_s_profile'
+     BEHAVIOR_PROFILE_FILENAME = 'swim_down_1mm_per_s_profile.inp'
+
+     -- profile set 5 ---
+     BEHAVIOR_PROFILE = 'swim_up_1mm_per_s_profile'
+     BEHAVIOR_PROFILE_FILENAME = 'swim_up_1mm_per_s_profile.inp'
+
+   DEFAULT_BEHAVIOR_PROFILE = 'passive'
+
+   NBEHAVIORS = 4
+
+  -- constant swimming behaviors first ---
+  -- behavior 1 ---
+   BEHAVIOR_SET = 'down_0.5mm_per_s'
+   BEHAVIOR_DIMENSION = 'vertical'
+   BEHAVIOR_TYPE = 'specified'
+     BEHAVIOR_FILENAME = 'down_0.5mm_per_s.inp'
+
+  -- behavior 2 ---
+   BEHAVIOR_SET = 'down_1mm_per_s'
+   BEHAVIOR_DIMENSION = 'vertical'
+   BEHAVIOR_TYPE = 'specified'
+     BEHAVIOR_FILENAME = 'down_1mm_per_s.inp'
+
+  -- tidal surfing behaviors ---
+  -- behavior 3 ---
+   BEHAVIOR_SET = 'transect_surf_0.5mm_per_s'
+   BEHAVIOR_DIMENSION = 'vertical'
+     BEHAVIOR_TYPE = 'surfing'
+       EBB_VELOCITY_THRESHOLD = 0.0 -- absolute value
+       FLOOD_VELOCITY_THRESHOLD = 0.0
+       EBB_BEHAVIOR_PROFILE = 'swim_down_0.5mm_per_s_profile'
+       FLOOD_BEHAVIOR_PROFILE = 'swim_up_0.5mm_per_s_profile'
+       SLACK_BEHAVIOR_PROFILE = 'passive'
+       NREGIONS = 8
+         -- region 1 ---
+         REGION = 'central_delta'
+         NTRANSECTS = 1
+           TRANSECT = 'false_river'
+         -- region 2 ---
+         REGION = 'east_delta'
+         NTRANSECTS = 1
+           TRANSECT = 'mokelumne_river'
+         -- region 3 ---
+         REGION = 'lower_sacramento_surf'
+         NTRANSECTS = 1
+           TRANSECT = 'sacramento'
+         -- region 4 ---
+         REGION = 'mainstem_sac'
+         NTRANSECTS = 1
+           TRANSECT = 'mainstem_sac'
+         -- region 5 ---
+         REGION = 'san_joaquin'
+         NTRANSECTS = 1
+           TRANSECT = 'san_joaquin'
+         -- region 6 ---
+         REGION = 'south_delta'
+         NTRANSECTS = 1
+           TRANSECT = 'middle_river'
+         -- region 7 ---
+         REGION = 'suisun_carquinez'
+         NTRANSECTS = 1
+           TRANSECT = 'suisun_carquinez'
+         -- region 8 ---
+         REGION = 'san_pablo_and_central'
+         NTRANSECTS = 1
+           TRANSECT = 'san_pablo_and_central'
+
+  -- behavior 4 ---
+   BEHAVIOR_SET = 'transect_surf_1mm_per_s'
+   BEHAVIOR_DIMENSION = 'vertical'
+     BEHAVIOR_TYPE = 'surfing'
+       EBB_VELOCITY_THRESHOLD = 0.0 -- absolute value
+       FLOOD_VELOCITY_THRESHOLD = 0.0
+       EBB_BEHAVIOR_PROFILE = 'swim_down_1mm_per_s_profile'
+       FLOOD_BEHAVIOR_PROFILE = 'swim_up_1mm_per_s_profile'
+       SLACK_BEHAVIOR_PROFILE = 'passive'
+       NREGIONS = 8
+         -- region 1 ---
+         REGION = 'central_delta'
+         NTRANSECTS = 1
+           TRANSECT = 'false_river'
+         -- region 2 ---
+         REGION = 'east_delta'
+         NTRANSECTS = 1
+           TRANSECT = 'mokelumne_river'
+         -- region 3 ---
+         REGION = 'lower_sacramento_surf'
+         NTRANSECTS = 1
+           TRANSECT = 'sacramento'
+         -- region 4 ---
+         REGION = 'mainstem_sac'
+         NTRANSECTS = 1
+           TRANSECT = 'mainstem_sac'
+         -- region 5 ---
+         REGION = 'san_joaquin'
+         NTRANSECTS = 1
+           TRANSECT = 'san_joaquin'
+         -- region 6 ---
+         REGION = 'south_delta'
+         NTRANSECTS = 1
+           TRANSECT = 'middle_river'
+         -- region 7 ---
+         REGION = 'suisun_carquinez'
+         NTRANSECTS = 1
+           TRANSECT = 'suisun_carquinez'
+         -- region 8 ---
+         REGION = 'san_pablo_and_central'
+         NTRANSECTS = 1
+           TRANSECT = 'san_pablo_and_central'
+
+ OUTPUT INFORMATION 
+   NOUTPUT_SETS = 1
+
+   -- output set 1 ---
+   OUTPUT_SET = 'half_hourly_output'
+   FLAG_LOG_LOGICAL = 'true'
+   BINARY_OUTPUT_INTERVAL_HOURS = 2.00
+   ASCII_OUTPUT_INTERVAL_HOURS =  24.00
+   HISTOGRAM_OUTPUT_INTERVAL_HOURS = 'none'
+   STATISTICS_OUTPUT_INTERVAL_HOURS = 'none'
+   CONCENTRATION_OUTPUT_INTERVAL_HOURS = 24.00 
+   REGION_COUNT_OUTPUT_INTERVAL_HOURS = 0.50
+   REGION_COUNT_UPDATE_INTERVAL_HOURS = 0.50
+   STATE_OUTPUT_INTERVAL_HOURS = 0.50
+   NUMBER_OF_VARIABLES_OUTPUT = 8
+     VARIABLE_OUTPUT = 'velocity'
+     VARIABLE_OUTPUT = 'depth_avg_vel'
+     VARIABLE_OUTPUT = 'salinity'
+     VARIABLE_OUTPUT = 'swimming_speed'
+     VARIABLE_OUTPUT = 'diffusivity'
+     VARIABLE_OUTPUT = 'water_depth'
+     VARIABLE_OUTPUT = 'water_level'
+     VARIABLE_OUTPUT = 'bed_elevation'
+
+     NODATA_VALUE = -999.0
+
+ PARTICLE GROUP INFORMATION 
+   NGROUPS = 10
+  
+   -- release group 1 ---
+   GROUP = 'Suisun_passive'
+   RELEASE_DISTRIBUTION_SET = 'region_release'
+     REGION = 'Suisun_Bay'
+   RELEASE_TIMING_SET = 'Feb1_release'
+   PARTICLE_TYPE = 'none'
+   BEHAVIOR_SET = 'none'   
+   OUTPUT_SET = 'half_hourly_output'    
+   OUTPUT_FILE_BASE = 'Suisun_passive'
+
+   -- release group 2 ---
+   GROUP = 'Suisun_down_0.5mm_per_s'
+   RELEASE_DISTRIBUTION_SET = 'region_release'
+     REGION = 'Suisun_Bay'
+   RELEASE_TIMING_SET = 'Feb1_release'
+   PARTICLE_TYPE = 'none'
+   BEHAVIOR_SET = 'down_0.5mm_per_s'
+   OUTPUT_SET = 'half_hourly_output'    
+   OUTPUT_FILE_BASE = 'Suisun_down_0.5mm_per_s'
+
+   -- release group 3 ---
+   GROUP = 'Suisun_down_1mm_per_s'
+   RELEASE_DISTRIBUTION_SET = 'region_release'
+     REGION = 'Suisun_Bay'
+   RELEASE_TIMING_SET = 'Feb1_release'
+   PARTICLE_TYPE = 'none'
+   BEHAVIOR_SET = 'down_1mm_per_s'
+   OUTPUT_SET = 'half_hourly_output'    
+   OUTPUT_FILE_BASE = 'Suisun_down_1mm_per_s'
+
+   -- release group 4 ---
+   GROUP = 'Suisun_transect_surf_0.5mm_per_s'
+   RELEASE_DISTRIBUTION_SET = 'region_release'
+     REGION = 'Suisun_Bay'
+   RELEASE_TIMING_SET = 'Feb1_release'
+   PARTICLE_TYPE = 'none'
+   BEHAVIOR_SET = 'transect_surf_0.5mm_per_s'
+   OUTPUT_SET = 'half_hourly_output'    
+   OUTPUT_FILE_BASE = 'Suisun_transect_surf_0.5mm_per_s'
+
+   -- release group 5 ---
+   GROUP = 'Suisun_transect_surf_1mm_per_s'
+   RELEASE_DISTRIBUTION_SET = 'region_release'
+     REGION = 'Suisun_Bay'
+   RELEASE_TIMING_SET = 'Feb1_release'
+   PARTICLE_TYPE = 'none'
+   BEHAVIOR_SET = 'transect_surf_1mm_per_s'
+   OUTPUT_SET = 'half_hourly_output'    
+   OUTPUT_FILE_BASE = 'Suisun_transect_surf_1mm_per_s'
+
+   -- release group 6 ---
+   GROUP = 'San_Pablo_passive'
+   RELEASE_DISTRIBUTION_SET = 'region_release'
+     REGION = 'San_Pablo_Bay'
+   RELEASE_TIMING_SET = 'Feb1_release'
+   PARTICLE_TYPE = 'none'
+   BEHAVIOR_SET = 'none'   
+   OUTPUT_SET = 'half_hourly_output'    
+   OUTPUT_FILE_BASE = 'San_Pablo_passive'
+
+   -- release group 7 ---
+   GROUP = 'San_Pablo_down_0.5mm_per_s'
+   RELEASE_DISTRIBUTION_SET = 'region_release'
+     REGION = 'San_Pablo_Bay'
+   RELEASE_TIMING_SET = 'Feb1_release'
+   PARTICLE_TYPE = 'none'
+   BEHAVIOR_SET = 'down_0.5mm_per_s'
+   OUTPUT_SET = 'half_hourly_output'    
+   OUTPUT_FILE_BASE = 'San_Pablo_down_0.5mm_per_s'
+
+   -- release group 8 ---
+   GROUP = 'San_Pablo_down_1mm_per_s'
+   RELEASE_DISTRIBUTION_SET = 'region_release'
+     REGION = 'San_Pablo_Bay'
+   RELEASE_TIMING_SET = 'Feb1_release'
+   PARTICLE_TYPE = 'none'
+   BEHAVIOR_SET = 'down_1mm_per_s'
+   OUTPUT_SET = 'half_hourly_output'    
+   OUTPUT_FILE_BASE = 'San_Pablo_down_1mm_per_s'
+
+   -- release group 9 ---
+   GROUP = 'San_Pablo_transect_surf_0.5mm_per_s'
+   RELEASE_DISTRIBUTION_SET = 'region_release'
+     REGION = 'San_Pablo_Bay'
+   RELEASE_TIMING_SET = 'Feb1_release'
+   PARTICLE_TYPE = 'none'
+   BEHAVIOR_SET = 'transect_surf_0.5mm_per_s'
+   OUTPUT_SET = 'half_hourly_output'    
+   OUTPUT_FILE_BASE = 'San_Pablo_transect_surf_0.5mm_per_s'
+
+   -- release group 10 ---
+   GROUP = 'San_Pablo_transect_surf_1mm_per_s'
+   RELEASE_DISTRIBUTION_SET = 'region_release'
+     REGION = 'San_Pablo_Bay'
+   RELEASE_TIMING_SET = 'Feb1_release'
+   PARTICLE_TYPE = 'none'
+   BEHAVIOR_SET = 'transect_surf_1mm_per_s'
+   OUTPUT_SET = 'half_hourly_output'    
+   OUTPUT_FILE_BASE = 'San_Pablo_transect_surf_1mm_per_s'
+
