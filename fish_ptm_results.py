@@ -2,12 +2,12 @@
 # has been performed and the associated .csv files are available
 import os, sys
 from datetime import datetime
-import ptm_time_utils
-import ptm_inp_reader
-import ptm_counts_reader
+import rmapy.model.ptm.ptm_time_utils
+import rmapy.model.ptm.ptm_inp_reader
+import rmapy.model.ptm.ptm_counts_reader
 import numpy as np
 import pdb
-import local_utils as utils
+import rmapy.model.ptm.local_utils as utils
 gis_lib_path = r'C:\svn\Code\python\rma\gis'
 if gis_lib_path not in sys.path:
     sys.path.insert(0,gis_lib_path)

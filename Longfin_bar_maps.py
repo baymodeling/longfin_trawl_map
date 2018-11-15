@@ -9,7 +9,7 @@ import pylab
 import matplotlib.pyplot as plt
 import pdb
 from datetime import datetime as dt
-import camt_region_dicts
+# import camt_region_dicts
 from stompy.grid import unstructured_grid
 from rmapy.utils.gis import polygons_w_attributes_from_shp as polys_from_shp
 import fish_ptm_results
@@ -50,10 +50,10 @@ class LongfinBarMaps(object):
     def get_inputs(self):
         # inputs used across all CAMT cases
         self.xylims = [530000,661500,4138000,4295000]
-        shp = 'R:\Projects\Longfin\Analysis\GIS\Polygons\Longfin_hatching_regions.shp'
+        shp = r"C:\git\longfin_trawl_map\Longfin_hatching_regions.shp"
         dict_field_name = 'Region'
-        shp_e = r'T:\RMA\Projects\CAMT\Analysis\GIS\CVP_and_SWP_regions.shp'
-        20mm_abundance_file = r'R:\Projects\Longfin\Observations\Trawl\20mm\20mm_trawl_summary.csv'
+#         shp_e = r'T:\RMA\Projects\CAMT\Analysis\GIS\CVP_and_SWP_regions.shp'
+        abundance_file_20mm = r"J:\Longfin\bar_plots\20mm_trawl_summary.csv"
         inpfile = 'FISH_PTM.inp'
 
         skip_regions=[]
@@ -61,11 +61,11 @@ class LongfinBarMaps(object):
         self.FRAC_FLAG = True
         
         # read 20mm flat file
-        self.obs_df = pd.read_csv(SKT_abundance_file, parse_dates=True)
+        self.obs_df = pd.read_csv(abundance_file_20mm, parse_dates=True)
 
         self.inpfile = os.path.join(self.run_dir,inpfile)
-        crd = camt_region_dicts.CamtRegionDicts(shp, shp_e, self.inpfile)
-        self.region_dicts = crd.get_region_dicts()
+#         crd = camt_region_dicts.CamtRegionDicts(shp, shp_e, self.inpfile) #camt shapefile
+#         self.region_dicts = crd.get_region_dicts() #cmat regions. Unneeded?
 
         # Read .shp file
         atts,pdict = polys_from_shp.PolysWAtts(shp,poly_dict=True, dict_field_name=dict_field_name)
@@ -438,18 +438,20 @@ class LongfinBarMaps(object):
                                                survey_dates, output_raw=True)
             return raw_data, pred_data, count_polys
 
-    def plot_map_obs(self, year, figname, normalize=False):
+    def plot_map_obs(self, years, figname, normalize=False):
 
         fig, ax = self.draw_water_and_polys()
-
-        # read observed counts
-        obs_data, obs_polys = self.get_obs_data(year)
-        barxy = self.findSiteLoc(obs_polys)
-
+        
         barboxsize = [10000.,10000.]
         leg_args = {'ylabel':'Abundance',
                     'bars':['January','February','March'],
                     'max':max_ab}
+        # read observed counts
+        obs_data, obs_polys = self.get_obs_data(years, leg_args['bars'])
+#         barxy = self.getFishPerRegion(obs_polys)
+        barxy = self.findSiteLoc(obs_polys)
+
+
 
         map_w_bars.plot_bars(ax, fig, obs_data, barxy, barboxsize, self.xylims,
                              leg_args, frac=False)
@@ -461,20 +463,112 @@ class LongfinBarMaps(object):
 
         return
 
-    def get_obs_data(self, year):
-        dformat = '%Y-%m-%d'
-        rows = np.where(self.obs_df['Yr'].values==year)[0]
-        survey_dates = np.empty((len(rows),2),dtype='datetime64[us]')
-        short2long = {s: l for l, s in self.region_dicts['rg_dict'].iteritems()}
-        obs_polys = [r for r in self.obs_df.keys() if r in short2long.keys()]
-        obs_polys_long = [] # long names used in findSiteLoc
-        obs_data = np.zeros((len(obs_polys),len(rows)),np.float64)
-        for nr, reg in enumerate(obs_polys):
-            obs_polys_long.append(short2long[reg])
-            obs_data[nr,:] = self.obs_df[reg][rows]
+    def get_obs_data(self, years, months):
+        
+        
+        valid_idx = [r for r, date in enumerate(self.obs_df['Year'].values) if date in years]
+        obs_polys = self.obs_df['lfs_region'].values[valid_idx]
+        obs_poly_box = []
+        for polygon in obs_polys:
+            if polygon not in obs_poly_box:
+                obs_poly_box.append(polygon) 
+        obs_data = np.zeros((len(obs_poly_box),len(months)),np.float64)
+        
+        for i in valid_idx:
+            cur_month = self.obs_df['Month'].values[i]
+            cur_month = dt.datetime.strptime(str(cur_month), '%m').strftime('%B')
+            if cur_month in months:
+                cur_region = self.obs_df['lfs_region'].values[i]
+                poly_idx = obs_poly_box.index(cur_region)
+                fish_counts = self.countAllFishDepths(i)
+#                 fish_counts = self.countEachFishDepths(i) #return values at each depth for stacked bars
+                month_idx = months.index(cur_month)
+                obs_data[poly_idx][month_idx] += fish_counts
+        
 
-        return obs_data, obs_polys_long
+        return obs_data, obs_polys
+    
+    def countAllFishDepths(self, index):
+        '''add fish at each mm depth to one total
+        '''
+        depth_readings = [r for r in self.obs_df.keys() if 'mm' in r]
+        total = 0
+        for depth in depth_readings:
+            total += self.obs_df[depth][index]
+        return total
+    
+    def plot_map_obs_size(self, years, figname, normalize=False):
 
+        fig, ax = self.draw_water_and_polys()
+        
+        barboxsize = [10000.,10000.]
+        leg_args = {'ylabel':'Abundance',
+                    'bars':['January','February','March'],
+                    'max':max_ab}
+        
+        size_bins = [3, 5, 10, 20, 50, 100] #pick sizes to be put into, first number is 0-#, last number with be #-inf
+        # read observed counts
+        obs_data, obs_polys = self.get_obs_size_data(years, leg_args['bars'], size_bins)
+
+        barxy = self.findSiteLoc(obs_polys)
+
+
+
+        map_w_bars.plot_bars(ax, fig, obs_data, barxy, barboxsize, self.xylims,
+                             leg_args, frac=False)
+
+        plt.savefig(figname, dpi=900, facecolor='white', 
+                    bbox_inches='tight')
+        plt.close()
+        plt.clf()
+
+        return     
+    
+    def get_obs_size_data(self, years, months, size_bins):
+        
+        num_size_bins = len(size_bins) + 1
+        
+        valid_idx = [r for r, date in enumerate(self.obs_df['Year'].values) if date in years]
+        obs_polys = self.obs_df['lfs_region'].values[valid_idx]
+        obs_poly_box = []
+        for polygon in obs_polys:
+            if polygon not in obs_poly_box:
+                obs_poly_box.append(polygon) 
+        obs_data = np.zeros((len(obs_poly_box),len(months), num_size_bins),np.float64)
+        
+        for i in valid_idx:
+            cur_month = self.obs_df['Month'].values[i]
+            cur_month = dt.datetime.strptime(str(cur_month), '%m').strftime('%B')
+            if cur_month in months:
+                cur_region = self.obs_df['lfs_region'].values[i]
+                poly_idx = obs_poly_box.index(cur_region)
+                fish_counts = self.countEachFishDepths(i, size_bins)
+#                 fish_counts = self.countEachFishDepths(i) #return values at each depth for stacked bars
+                month_idx = months.index(cur_month)
+                obs_data[poly_idx][month_idx] += fish_counts
+                
+        return obs_data, obs_polys    
+            
+    def countEachFishDepths(self, index, size_bins):
+        '''return fish depth at each mm depth
+        '''
+        depth_readings = [r for r in self.obs_df.keys() if 'mm' in r]
+        sizes = np.zeros(len(size_bins) + 1)
+        for depth in depth_readings:
+            depnum = int(depth.split('mm')[0])
+            last_idx = 0
+            for bin in size_bins:
+                if depnum >= size_bins[-1]: #just check if its bigger than the biggest bin...
+                    last_idx = len(sizes)
+                    break
+                elif depnum < bin:
+                    break
+                else:
+                    last_idx += 1
+            sizes[last_idx] += self.obs_df[depth][index]
+        
+        #TODO this
+    
     def get_obs_from_fit(self, year):
         dformat = '%Y-%m-%d'
         rows = np.where(self.obs_df['Yr'].values==year)[0]
@@ -587,13 +681,15 @@ if __name__ == '__main__':
 
     run_dir = r'Z:\PTM_Simulations\Longfin\2012_all_behaviors\Run'
     grd_file = os.path.join(run_dir, 'FISH_PTM.grd')
-    cbm = CamtBarMaps(run_dir, grd_file)
+    cbm = LongfinBarMaps(run_dir, grd_file)
     bm_inputs = cbm.get_inputs()
     fig_dir = '.'
-    year = 2012
+    years = [2012]
     if test_obs:
-        figname = os.path.join(fig_dir, 'obs_2002.png')
-        cbm.plot_map_obs(year, figname)
+        figname = os.path.join(fig_dir, 'obs_monthly.png')
+        cbm.plot_map_obs(years, figname)
+        figname = os.path.join(fig_dir, 'obs_size.png')
+        cbm.plot_map_obs_size(years, figname)
     if test_pred:
         model = 'FISH-PTM'
         gname = 'tmd_Sac'
