@@ -13,14 +13,17 @@ import pylab
 import numpy as np
 import pdb
 import matplotlib.pyplot as plt
-from matplotlib.transforms import Bbox
+from matplotlib.transforms import Bbox, TransformedBbox
+import pylab
 
 matplotlib.rcParams['hatch.linewidth'] = 0.7
 matplotlib.rcParams['hatch.color'] = 'w'
 
 def plot_bars(ax, fig, data, xy, boxsize, xylims, leg_args, frac=True, 
-              alt_hatch=False):
+              alt_hatch=False, labels=[]):
     num_plots = len(data)
+    fig.show()
+    fig.canvas.draw()
     # Determine plot limits
     if frac:
         plot_range = [0.,1.]
@@ -43,13 +46,21 @@ def plot_bars(ax, fig, data, xy, boxsize, xylims, leg_args, frac=True,
             disp_coords = ax.transData.transform(bb_data)
             # Ben - what is this doing? Why does it need fig and not ax?
             fig_coords = fig.transFigure.inverted().transform(disp_coords)
-            
-            plotBarGraph(fig_coords, data[p,:],fig, plot_range,
-                         alt_hatch=alt_hatch)
-      
-    xy_leg = [596000.,4198000.] # move to main
-    bb_data = Bbox.from_bounds(xy_leg[0]-boxsize[0]/2., xy_leg[1], 
-                               boxsize[0], boxsize[1])
+            if len(labels) > 1:
+                plotBarGraph(fig_coords, data[p,:],fig, plot_range,
+                             alt_hatch=alt_hatch, labels=labels[p,:])
+            else:
+                plotBarGraph(fig_coords, data[p,:],fig, plot_range,
+                             alt_hatch=alt_hatch)
+            fig.canvas.draw()
+    xy_leg = [589782.5317557553,4187778.3682879894] # move to main
+    mod = len(leg_args['bars']) / 4
+    if len(leg_args['bars']) % 4 != 0:
+        mod += 1
+#     bb_data = Bbox.from_bounds(xy_leg[0]-boxsize[0]/2., xy_leg[1], 
+#                                boxsize[0], boxsize[1])
+    bb_data = Bbox.from_bounds(xy_leg[0]-boxsize[0]/2., xy_leg  [1], 
+                               boxsize[0]* mod, boxsize[1])
     disp_coords = ax.transData.transform(bb_data)
     fig_coords = fig.transFigure.inverted().transform(disp_coords)
     if alt_hatch:
@@ -65,19 +76,33 @@ def plot_bars(ax, fig, data, xy, boxsize, xylims, leg_args, frac=True,
     
     
 def plotBarGraph(xys, bar_vals, fig, y_range, legend=False, alt_hatch=False,
-                 xlabels=[], ylabel=[]):
+                 xlabels=[], ylabel=[], labels=[]):
     # Plots a bar graphs with the given bar names and values at the x,y coordinates of the Delta map.
     
     # Colors for bars so they get plotted with the same color order
-    colors = ['b','g','r','c','m','y','k'] # max of 7 bars per graph supported
-    
+#     colors = ['b','g','r','c','m','y','k', '#ff33cc', '#996633'] # max of 9 bars per graph supported
+
     #Create axes
     ax = fig.add_axes(Bbox(xys))
+    tot_bar_vals = np.empty(0)
+    tot_labels = np.empty(0)
+    for item in bar_vals:
+        tot_bar_vals = np.append(tot_bar_vals, item)
+    for item in labels:
+        tot_labels = np.append(tot_labels, item)
     
+    cmap_pars = pylab.cm.get_cmap('spring')
+    colors=[cmap_pars(float(ng)/float(len(tot_bar_vals))) for ng in range(len(tot_bar_vals))]
     # Plot bars
-    width = 1.
-    ind = np.arange(len(bar_vals))
-    bar1 = ax.bar(ind,bar_vals,width)
+    if legend:
+        width = 8.
+    else:
+#         width = 1.
+        width = .7
+    ind = np.arange(len(tot_bar_vals))
+    if legend:
+        ind = np.arange(0, len(tot_bar_vals)* 10, 10)
+    bar1 = ax.bar(ind,tot_bar_vals,width)
     for b,bar in enumerate(bar1):
         if alt_hatch:
             bar.set_color(colors[b/2])
@@ -86,6 +111,7 @@ def plotBarGraph(xys, bar_vals, fig, y_range, legend=False, alt_hatch=False,
                 bar.set_alpha(0.5)
         else:
             bar.set_color(colors[b])
+            
 
     #Format plot
     ax.set_ylim(y_range[0],y_range[1])
@@ -94,15 +120,15 @@ def plotBarGraph(xys, bar_vals, fig, y_range, legend=False, alt_hatch=False,
 
     # annotate
     ymax = y_range[1]
-    for nbv,bv in enumerate(bar_vals):
-        if bv > ymax:
-            plt.annotate("%.0E"%(bv),[ind[nbv]-0.5,0.65*ymax],rotation=90)
+#     for nbv,bv in enumerate(tot_bar_vals):
+#         if bv > ymax:
+#             plt.annotate("%.0E"%(bv),[ind[nbv]-0.5,0.65*ymax],rotation=90)
 
     if legend:
         ax.xaxis.set_visible(True)
         ax.yaxis.set_visible(True)
         if alt_hatch:
-            xticks = np.arange(0,len(bar_vals),2)+0.5
+            xticks = np.arange(0,len(tot_bar_vals),2)+0.5
         else:
             xticks = ind
         ax.set_xticks(xticks)
@@ -117,4 +143,11 @@ def plotBarGraph(xys, bar_vals, fig, y_range, legend=False, alt_hatch=False,
     else:
         ax.xaxis.set_visible(False)
         ax.yaxis.set_visible(False)
+        
+    if len(tot_labels) > 0:
+        rects = ax.patches
+        for rect, label in zip(rects, tot_labels):
+            height = rect.get_height()
+            ax.text(rect.get_x() + rect.get_width() / 2, height + 5, label,
+                    ha='center', va='bottom', color='red', fontsize=7)
     
