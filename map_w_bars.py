@@ -136,9 +136,19 @@ def plotBarGraph(xys, bar_vals, fig, y_range, legend=False, alt_hatch=False,
         ax.set_yticks(ax.get_yticks()[::2])
         ytick_max = int(y_range[1])/100000*100000
         ax.set_yticks([0,ytick_max])
-        exponent = np.log10(ytick_max)
-        if exponent - int(exponent) == 0.:
-            ax.set_yticklabels(['0','10$^%d$'%(exponent)])
+        try:
+            ytick_max = int(y_range[1])/100000*100000
+            ax.set_yticks([0,ytick_max])
+            exponent = np.log10(ytick_max)
+            if exponent - int(exponent) == 0.:
+                ax.set_yticklabels(['0','10$^%d$'%(exponent)])
+        except OverflowError: #if the max is too small, you get an overflow error. then just use the normal number
+            ytick_max = int(y_range[1])
+            ax.set_yticks([0,ytick_max])
+            ax.set_yticklabels(['0','{0}'.format(ytick_max)])
+#         exponent = np.log10(ytick_max)
+#         if exponent - int(exponent) == 0.:
+#             ax.set_yticklabels(['0','10$^%d$'%(exponent)])
         ax.set_ylabel(ylabel)
     else:
         ax.xaxis.set_visible(False)

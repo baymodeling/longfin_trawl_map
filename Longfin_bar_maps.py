@@ -40,19 +40,19 @@ class LongfinBarMaps(object):
         shp = r"C:\git\longfin_trawl_map\Longfin_hatching_regions.shp"
         dict_field_name = 'Region'
 #         shp_e = r'T:\RMA\Projects\CAMT\Analysis\GIS\CVP_and_SWP_regions.shp'
-        abundance_file_20mm = r"J:\Longfin\bar_plots\20mm_trawl_summary.csv"
+#         abundance_file_20mm = r"J:\Longfin\bar_plots\20mm_trawl_summary.csv"
         inpfile = 'FISH_PTM.inp'
         static_volumes = r"C:\git\longfin_trawl_map\static_volumes_1.25m_NAVD.csv"
         
-        BW_data_file = r"J:\Longfin\bar_plots\20mm_quantiles_{0}.csv".format(self.year)
+#         BW_data_file = r"J:\Longfin\bar_plots\20mm_quantiles_{0}.csv".format(self.year)
         skip_regions=[]
         
         self.FRAC_FLAG = True
         
         # read 20mm flat file
-        self.obs_df = pd.read_csv(abundance_file_20mm, parse_dates=True)
+#         self.obs_df = pd.read_csv(abundance_file_20mm, parse_dates=True)
         self.obs_static_vol = pd.read_csv(static_volumes, parse_dates=True)
-        self.obs_BW_file = pd.read_csv(BW_data_file, parse_dates=True)
+#         self.obs_BW_file = pd.read_csv(BW_data_file, parse_dates=True)
         self.inpfile = os.path.join(self.run_dir,inpfile)
         
 #         crd = camt_region_dicts.CamtRegionDicts(shp, shp_e, self.inpfile) #camt shapefile
@@ -485,24 +485,37 @@ class LongfinBarMaps(object):
 
         return labels
 
-    def plot_map_obs(self, figname, size_range, Surveys, normalize=False):
+    def plot_map_obs(self, longfile_path, figname, size_range, Surveys, normalize=False):
         '''
         Creates a bar plot of the Abundance for a particular year.
          many surveys is untested and may look really ugly. Consider keeping 9 surveys max.
         
         '''
+        self.obs_df = pd.read_csv(longfile_path, parse_dates=True)
+
         fig, ax = self.draw_water_and_polys()
-        plt.title('Observed Abundance {0}'.format(self.year))
         bars = []
         for num in Surveys:
             bars.append('Survey {0}'.format(num))
         barboxsize = [10000.,10000.] #determines size of plots. Don't touch.
-        max_lim = self.max_ab[self.year] #grabs correct max for year
-        leg_args = {'ylabel':'Abundance',
+        leg_args = {'ylabel':'Density',
                     'bars':bars,
-                    'max':max_lim}
+                    'max':''}
+        
+        if leg_args['ylabel'] == 'Density':
+            leg_args['max'] = self.max_den[self.year]
+        elif leg_args['ylabel'] == 'Abundance':
+            leg_args['max'] = self.max_ab[self.year]
+            
+        plt.title('Observed {0} {1}'.format(leg_args['ylabel'], self.year))
+        
+        
         # read observed counts
         obs_data = self.get_obs_data(self.year, Surveys, size_range)
+        
+        if leg_args['ylabel'] == 'Density':
+            obs_data = self.Abun_to_Density_Bar(obs_data) #convert abundance data to density
+        
         barxy = self.findSiteLoc(self.poly_names) #get xy for each site
         labels = self.findNoBarData(Surveys, self.year) #find correct labels for surveys with no data
         map_w_bars.plot_bars(ax, fig, obs_data, barxy, barboxsize, self.xylims,
@@ -542,14 +555,14 @@ class LongfinBarMaps(object):
             obs_count[poly_idx][bar_idx] += fish_counts
             obs_vol[poly_idx][bar_idx] += cur_vol
             
-        with open('Obs_data_output.csv', 'wb') as outtext:    
-            outtext.write('region,year,survey,fish count,volume per Survey,Density in 10,000 fish per m3,Region Volume,Reg Abundance\n')
+        with open('Obs_data_output_{0}_{1}mm-{2}mm.csv'.format(year, size_range[0], size_range[1]), 'wb') as outtext:    
+            outtext.write('region,year,survey,fish count,volume per Survey,Density in 10000 fish per m3,Region Volume,Reg Abundance\n')
             for i, region in enumerate(self.poly_names):
-                print region
+#                 print region
                 vol_file_idx = np.where(self.obs_static_vol['region_name'].values == region.replace('_',' '))[0][0]
                 region_vol = self.obs_static_vol['vol_top_999_m'][vol_file_idx]
                 for j, survey_cnt in enumerate(obs_count[i]):
-                    print survey_cnt
+#                     print survey_cnt
                     obs_density[i][j] = survey_cnt / obs_vol[i][j] 
                     reg_abundance[i][j] = obs_density[i][j] * region_vol
                     reg_abundance = np.nan_to_num(reg_abundance)
@@ -582,7 +595,7 @@ class LongfinBarMaps(object):
                 continue
         return total
     
-    def Abun_to_Density(self, obs_Data):
+    def Abun_to_Density_BW(self, obs_Data, size_range):
         '''
         Converts Abundance to density (fish per 10,000 m3)
         Currently only applies to Boxwhisker plots, for when Density is selected
@@ -597,25 +610,41 @@ class LongfinBarMaps(object):
                 for key in surv.keys():
                     obs_density[i][s][key] = (surv[key] / region_vol) * 10000.
 #                 obs_density[i][s] = surv / region_vol * 10000 #get density by dividing region vol and then 100000 fishies
-        self.write_Box_Stats(obs_density, 'Density_BoxWhisker_Stats.csv')
+        self.write_Box_Stats(obs_density, 'Density_BoxWhisker_Stats_{0}_{1}mm-{2}mm.csv'.format(self.year, size_range[0], size_range[1]))
+                
+        return obs_density
+    
+    def Abun_to_Density_Bar(self, obs_Data):
+        '''
+        Converts Abundance to density (fish per 10,000 m3)
+        Currently only applies to Bar plots, for when Density is selected
+        Does not write a csv like the other file since density is in the first
+        '''
+        obs_density = np.empty_like(obs_Data)
+        for i, reg in enumerate(self.poly_names):
+            vol_file_idx = np.where(self.obs_static_vol['region_name'].values == reg.replace('_',' '))[0][0]
+            region_vol = self.obs_static_vol['vol_top_999_m'][vol_file_idx]
+            for s, surv in enumerate(obs_Data[i]):
+                obs_density[i][s] = (surv / region_vol) * 10000.
                 
         return obs_density
             
             
             
-    def plot_obs_boxwhisker(self, figname, size_range, Surveys):
+    def plot_obs_boxwhisker(self, data_path, figname, size_range, Surveys):
         '''
         Plots Box Whisker plots for observed data in trawl files
         data is precalculated and does NOT come from long file, but is possible
         ylabel can be set to "Abundance" or "Density"
         '''
+        self.obs_BW_file = pd.read_csv(data_path, parse_dates=True)
         fig, ax = self.draw_water_and_polys()
         boxes = []
         
         for num in Surveys:
             boxes.append('Survey {0}'.format(num))
 
-        leg_args = {'ylabel':'Density',
+        leg_args = {'ylabel':'Abundance',
                     'boxes':boxes,
                     'max':''}
         
@@ -633,7 +662,7 @@ class LongfinBarMaps(object):
         labels = self.findNoBoxData(Surveys)
         
         if leg_args['ylabel'] == 'Density':
-            obs_data = self.Abun_to_Density(obs_data) #convert abundance data to density
+            obs_data = self.Abun_to_Density_BW(obs_data, size_range) #convert abundance data to density
         map_w_boxes.plot_boxes(ax, fig, obs_data, barxy, barboxsize, self.xylims,
                              leg_args, frac=False, labels=labels)
 
@@ -661,7 +690,7 @@ class LongfinBarMaps(object):
 
         
         for reg_idx ,reg in enumerate(self.poly_names):
-            print reg
+#             print reg
             valid_idx = [r for r, date in enumerate(self.obs_df['Year'].values) if date in years and self.obs_df['lfs_region'].values[r] == reg]
 #             valid_idx = [r for r, obsreg in enumerate(self.obs_df['lfs_region'].values) if obsreg == reg ]
             yearly_surveys= list(set(self.obs_df['Survey'].values[valid_idx]))
@@ -682,7 +711,7 @@ class LongfinBarMaps(object):
                 obs_count[reg_idx][survey_idx] += fish_counts
                 obs_vol[reg_idx][survey_idx] += self.obs_df['Volume'].values[i]
                 obs_density[reg_idx][survey_idx] += fish_counts / self.obs_df['Volume'].values[i]
-                print cur_survey, reg, fish_counts
+#                 print cur_survey, reg, fish_counts
                 reg_abundance[reg_idx][survey_idx] += obs_density[reg_idx][survey_idx] * region_vol
         return reg_abundance
     
@@ -696,7 +725,7 @@ class LongfinBarMaps(object):
         stats = []
 
         for region in self.poly_names:
-            print region
+#             print region
             reg_idx = [r for r, reg in enumerate(self.obs_BW_file['region'].values) if reg == region.replace('_', ' ') and self.obs_BW_file['survey'].values[r] in surveys]
 
             for idx in reg_idx:
@@ -712,7 +741,7 @@ class LongfinBarMaps(object):
                 item["whislo"] = self.obs_BW_file['q5'].values[idx]
                 item["whishi"] = self.obs_BW_file['q95'].values[idx]
                 region_stats[reg_idx][surv_idx] = item
-        self.write_Box_Stats(region_stats, 'Abundance_BoxWhisker_Stats.csv')
+        self.write_Box_Stats(region_stats, 'BoxWhisker_Stats_{0}.csv'.format(self.year))
         return region_stats
     
     def plot_precalc_Boxwhisker(self, obs_data, fig_name):
@@ -880,7 +909,7 @@ if __name__ == '__main__':
     test_obs_vs_pred = False #Out of Order
     test_metrics = False #Out of Order
 
-    year = 2016 #keep to one year for now, multiyear support coming
+    year = 2012 #keep to one year for now, multiyear support coming
     size_range = [12, 25] #inclusive range for the mm values. so min and max values are included in totals
     surveys = [1,2,3,4,5,6,7,8,9]
 
@@ -892,10 +921,13 @@ if __name__ == '__main__':
     
     if obs_bar:
         figname = os.path.join(fig_dir, 'obs_Bar_Plots')
-        cbm.plot_map_obs(figname, size_range, surveys)
+        obs_data = r"J:\Longfin\bar_plots\20mm_trawl_summary.csv"
+        cbm.plot_map_obs(obs_data, figname, size_range, surveys)
     if obs_boxwhisker:
         figname = os.path.join(fig_dir, 'obs_Box_Whisker')
-        cbm.plot_obs_boxwhisker(figname, size_range, surveys)
+        obs_data = r"J:\Longfin\bar_plots\20mm_quantiles_larvae_{0}.csv".format(year)
+#         obs_data = r"J:\Longfin\bar_plots\20mm_quantiles_small_larvae_{0}.csv".format(year)
+        cbm.plot_obs_boxwhisker(obs_data, figname, size_range, surveys)
     if test_pred:
         model = 'FISH-PTM'
         gname = 'tmd_Sac'
