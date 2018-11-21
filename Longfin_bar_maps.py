@@ -707,6 +707,7 @@ class LongfinBarMaps(object):
     def plot_precalc_Boxwhisker(self, obs_data, fig_name):
         '''Structure is a 4 len list for each region in self.poly
             list contains averaged q5, q25, q50, q75, q95
+            makes a simple box whisker plt, but not on a map. Under Construction
         '''
         stats = []
         fig = plt.figure(figsize=[11,7])
