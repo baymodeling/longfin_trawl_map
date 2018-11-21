@@ -17,37 +17,22 @@ import map_w_bars
 import map_w_boxes
 from datetime import datetime as dtime
 
-max_ab = {2013:50000000,
-          2012:20000000} # 50 million
 
 # to do
 # - generalize to incorporate data from multiple surveys
 # - add "ocean" region to ptm
 # - add "landward" region to ptm
 
-utm_dict = {'Central_Delta_and_Franks_Tract':[618495.3074911481,4212214.95338295],
-            'Upper_Sacramento_River':[629749.8528383253,4244678.154020051],
-            'North_and_South_Forks_Mokelumne_River':[636706.2529748471,4220063.19969082],
-            'South_Delta':[642592.4377057501,4189918.7990992256],
-            'Cache_Slough_Complex':[615123.5756282026,4262158.33897849],
-            'Confluence':[606111.7244591176,4214227.897524303],
-            'Suisun_Bay':[588707.6453680942,4209584.007177471],
-            'Carquinez_Strait':[571227.4604096551,4209182.676400363], 
-            'Suisun_Marsh':[586210.4760883171,4225235.907484644],
-            'San_Pablo_Bay':[553942.9282736651,4208647.568697553],
-            'Petaluma':[540030.1280006216,4221490.153564978],
-            'South_SF_Bay':[566963.8823753597,4165482.214004264],
-            'Central_SF_Bay':[550375.5435882693,4192415.9683790025], 
-            'Lower_South_SF_Bay':[586049.3904422284,4145683.2290003207], 
-            'Napa_Sonoma':[556261.7283191724,4226662.861358802]}
 
 class LongfinBarMaps(object):
 
     def __init__(self,
                  run_dir,
-                 grd_file):
+                 grd_file,
+                 year):
         self.run_dir = run_dir
         self.grd_file = grd_file
+        self.year = year
 
     def get_inputs(self):
         # inputs used across all CAMT cases
@@ -59,7 +44,7 @@ class LongfinBarMaps(object):
         inpfile = 'FISH_PTM.inp'
         static_volumes = r"C:\git\longfin_trawl_map\static_volumes_1.25m_NAVD.csv"
         
-        BW_data_file = r"J:\Longfin\bar_plots\20mm_quantiles_2013.csv"
+        BW_data_file = r"J:\Longfin\bar_plots\20mm_quantiles_{0}.csv".format(self.year)
         skip_regions=[]
         
         self.FRAC_FLAG = True
@@ -86,6 +71,33 @@ class LongfinBarMaps(object):
           
         # use FISH-PTM grid for background with both models
         self.grd = unstructured_grid.PtmGrid(self.grd_file)
+        
+        self.utm_dict = {'Central_Delta_and_Franks_Tract':[618495.3074911481,4212214.95338295],
+            'Upper_Sacramento_River':[629749.8528383253,4244678.154020051],
+            'North_and_South_Forks_Mokelumne_River':[636706.2529748471,4220063.19969082],
+            'South_Delta':[642592.4377057501,4189918.7990992256],
+            'Cache_Slough_Complex':[615123.5756282026,4262158.33897849],
+            'Confluence':[606111.7244591176,4214227.897524303],
+            'Suisun_Bay':[588707.6453680942,4209584.007177471],
+            'Carquinez_Strait':[571227.4604096551,4209182.676400363], 
+            'Suisun_Marsh':[586210.4760883171,4225235.907484644],
+            'San_Pablo_Bay':[553942.9282736651,4208647.568697553],
+            'Petaluma':[540030.1280006216,4221490.153564978],
+            'South_SF_Bay':[566963.8823753597,4165482.214004264],
+            'Central_SF_Bay':[550375.5435882693,4192415.9683790025], 
+            'Lower_South_SF_Bay':[586049.3904422284,4145683.2290003207], 
+            'Napa_Sonoma':[556261.7283191724,4226662.861358802]}
+
+        self.max_ab = {2012:20000000,
+                  2013:50000000,
+                  2016:2500000,
+                  2017:20000000}
+        
+        self.max_den = {2012:750,
+                   2013:7500,
+                   2016:500,
+                   2017:750}
+
 
         return
         
@@ -235,7 +247,7 @@ class LongfinBarMaps(object):
                 continue # ignore cc counts for now
             else:
                 long_name = short_to_long[short_name]
-                sl = utm_dict[long_name]
+                sl = self.utm_dict[long_name]
                 if not np.isnan(sl[0]):
                     fate_to_number[long_name]=[ns]
                     fate_list.append(long_name)
@@ -444,19 +456,17 @@ class LongfinBarMaps(object):
                                                survey_dates, output_raw=True)
             return raw_data, pred_data, count_polys
 
-    def findNoBarData(self, Surveys, years):
+    def findNoBarData(self, Surveys, year):
         regions = self.poly_names
-        labels = np.chararray((len(regions), len(years), len(Surveys)))
+        labels = np.chararray((len(regions), len(Surveys)))
         labels[:] = 'X'
-        valid_idx = [r for r, date in enumerate(self.obs_df['Year'].values) if date in years and self.obs_df['Survey'][r] in Surveys]
+        valid_idx = [r for r, date in enumerate(self.obs_df['Year'].values) if date == year and self.obs_df['Survey'][r] in Surveys]
         for idx in valid_idx:
             cur_region = self.obs_df['lfs_region'][idx]
             reg_idx = regions.index(cur_region)
             cur_surv = self.obs_df['Survey'][idx]
             bar_idx = Surveys.index(cur_surv)
-            cur_year = self.obs_df['Year'][idx]
-            year_idx = years.index(cur_year)
-            labels[reg_idx][year_idx][bar_idx] = ''
+            labels[reg_idx][bar_idx] = ''
 
         return labels
     
@@ -475,30 +485,29 @@ class LongfinBarMaps(object):
 
         return labels
 
-    def plot_map_obs(self, years, figname, Surveys, normalize=False):
+    def plot_map_obs(self, figname, size_range, Surveys, normalize=False):
         '''
-        Creates a bar plot of the Abundance for a particular year. Currently allows for several years,
-        but many surveys and years is untested and may look really ugly. Consider keeping 9 surveys max.
+        Creates a bar plot of the Abundance for a particular year.
+         many surveys is untested and may look really ugly. Consider keeping 9 surveys max.
         
         '''
         fig, ax = self.draw_water_and_polys()
-        plt.title('Observed Abundance {0}'.format(years[0]))
+        plt.title('Observed Abundance {0}'.format(self.year))
         bars = []
         for num in Surveys:
             bars.append('Survey {0}'.format(num))
         barboxsize = [10000.,10000.] #determines size of plots. Don't touch.
-        max_lim = max_ab[years[0]] #grabs correct max for year
+        max_lim = self.max_ab[self.year] #grabs correct max for year
         leg_args = {'ylabel':'Abundance',
                     'bars':bars,
                     'max':max_lim}
         # read observed counts
-        size_range = (12,15) #include size range in mm that we want, inclusive, min and max. Alternatively,set to 'All'
-        obs_data = self.get_obs_data(years, Surveys, size_range)
+        obs_data = self.get_obs_data(self.year, Surveys, size_range)
         barxy = self.findSiteLoc(self.poly_names) #get xy for each site
-        labels = self.findNoBarData(Surveys, years) #find correct labels for surveys with no data
+        labels = self.findNoBarData(Surveys, self.year) #find correct labels for surveys with no data
         map_w_bars.plot_bars(ax, fig, obs_data, barxy, barboxsize, self.xylims,
                              leg_args, frac=False, labels=labels)
-
+        figname = '_'.join([figname, str(self.year), '{0}mm-{1}mm.png'.format(size_range[0], size_range[1])])
         plt.savefig(figname, dpi=900, facecolor='white',bbox_inches='tight')
 
         plt.close()
@@ -506,25 +515,23 @@ class LongfinBarMaps(object):
 
         return
 
-    def get_obs_data(self, years, Surveys, size_range):
+    def get_obs_data(self, year, Surveys, size_range):
         '''
         Reads Long file and converts counts per survey into density and Reg Abundance.
         Splits data up into Region - Year - Survey
         Writes output text file for quick check of data numbers
         '''
-        valid_idx = [r for r, date in enumerate(self.obs_df['Year'].values) if date in years and self.obs_df['Survey'][r] in Surveys]
+        valid_idx = [r for r, date in enumerate(self.obs_df['Year'].values) if date == year and self.obs_df['Survey'][r] in Surveys]
 
-        obs_count = np.zeros((len(self.poly_names),len(years),len(Surveys)),np.float64)
-        obs_vol = np.zeros((len(self.poly_names),len(years), len(Surveys)),np.float64)
-        obs_density = np.zeros((len(self.poly_names),len(years),len(Surveys)),np.float64)
-        reg_abundance = np.zeros((len(self.poly_names),len(years),len(Surveys)),np.float64)
+        obs_count = np.zeros((len(self.poly_names),len(Surveys)),np.float64)
+        obs_vol = np.zeros((len(self.poly_names), len(Surveys)),np.float64)
+        obs_density = np.zeros((len(self.poly_names),len(Surveys)),np.float64)
+        reg_abundance = np.zeros((len(self.poly_names),len(Surveys)),np.float64)
         
         for i in valid_idx:
             cur_region = self.obs_df['lfs_region'].values[i]
             cur_survey = self.obs_df['Survey'].values[i]
             cur_vol = self.obs_df['Volume'].values[i]
-            cur_year = self.obs_df['Year'].values[i]
-            year_idx = years.index(cur_year)
             poly_idx = self.poly_names.index(cur_region)
             bar_idx = Surveys.index(cur_survey)
 
@@ -532,8 +539,8 @@ class LongfinBarMaps(object):
                 fish_counts = self.countAllFishDepths(i)
             else:
                 fish_counts = self.countSomeFishDepths(i, size_range)
-            obs_count[poly_idx][year_idx][bar_idx] += fish_counts
-            obs_vol[poly_idx][year_idx][bar_idx] += cur_vol
+            obs_count[poly_idx][bar_idx] += fish_counts
+            obs_vol[poly_idx][bar_idx] += cur_vol
             
         with open('Obs_data_output.csv', 'wb') as outtext:    
             outtext.write('region,year,survey,fish count,volume per Survey,Density in 10,000 fish per m3,Region Volume,Reg Abundance\n')
@@ -541,15 +548,13 @@ class LongfinBarMaps(object):
                 print region
                 vol_file_idx = np.where(self.obs_static_vol['region_name'].values == region.replace('_',' '))[0][0]
                 region_vol = self.obs_static_vol['vol_top_999_m'][vol_file_idx]
-                for y, year in enumerate(years):
-                    print year
-                    for j, survey_cnt in enumerate(obs_count[i][y]):
-                        print survey_cnt
-                        obs_density[i][y][j] = survey_cnt / obs_vol[i][y][j] 
-                        reg_abundance[i][y][j] = obs_density[i][y][j] * region_vol
-                        reg_abundance = np.nan_to_num(reg_abundance)
-                        outline = ','.join([str(r) for r in [region, year, j+1, survey_cnt, obs_vol[i][y][j], obs_density[i][y][j] * 10000, region_vol, reg_abundance[i][y][j], '\n']])
-                        outtext.write(outline)
+                for j, survey_cnt in enumerate(obs_count[i]):
+                    print survey_cnt
+                    obs_density[i][j] = survey_cnt / obs_vol[i][j] 
+                    reg_abundance[i][j] = obs_density[i][j] * region_vol
+                    reg_abundance = np.nan_to_num(reg_abundance)
+                    outline = ','.join([str(r) for r in [region, year, j+1, survey_cnt, obs_vol[i][j], obs_density[i][j] * 10000, region_vol, reg_abundance[i][j], '\n']])
+                    outtext.write(outline)
         
         return reg_abundance
     
@@ -570,7 +575,11 @@ class LongfinBarMaps(object):
         max = size_range[1]
         for depth in range(min, max+1):
             key = str(depth) + 'mm'
-            total += self.obs_df[key][index]
+            if key in self.obs_df.columns.values:
+                total += self.obs_df[key][index]
+            else:
+                print 'Invalid depth of', key
+                continue
         return total
     
     def Abun_to_Density(self, obs_Data):
@@ -594,7 +603,7 @@ class LongfinBarMaps(object):
             
             
             
-    def plot_obs_boxwhisker(self, years, figname,  Surveys):
+    def plot_obs_boxwhisker(self, figname, size_range, Surveys):
         '''
         Plots Box Whisker plots for observed data in trawl files
         data is precalculated and does NOT come from long file, but is possible
@@ -605,28 +614,30 @@ class LongfinBarMaps(object):
         
         for num in Surveys:
             boxes.append('Survey {0}'.format(num))
-        max_lim = max_ab[years[0]]
+
         leg_args = {'ylabel':'Density',
                     'boxes':boxes,
-                    'max':max_lim}
-#         leg_args = {'ylabel':'Abundance',
-#                     'boxes':boxes,
-#                     'max':max_lim}
+                    'max':''}
         
-        plt.title('Observed {0} {1}'.format(leg_args['ylabel'], years[0]))
+        if leg_args['ylabel'] == 'Density':
+            leg_args['max'] = self.max_den[self.year]
+        elif leg_args['ylabel'] == 'Abundance':
+            leg_args['max'] = self.max_ab[self.year]
+
+        
+        plt.title('Observed {0} {1}'.format(leg_args['ylabel'], self.year))
         barboxsize = [10000.,10000.]
         
-        obs_data = self.get_precalc_BW_data(surveys)
+        obs_data = self.get_precalc_BW_data(Surveys)
         barxy = self.findSiteLoc(self.poly_names)
         labels = self.findNoBoxData(Surveys)
         
         if leg_args['ylabel'] == 'Density':
             obs_data = self.Abun_to_Density(obs_data) #convert abundance data to density
-            leg_args['max'] = 10000
         map_w_boxes.plot_boxes(ax, fig, obs_data, barxy, barboxsize, self.xylims,
                              leg_args, frac=False, labels=labels)
 
-
+        figname = '_'.join([figname, str(self.year), '{0}mm-{1}mm.png'.format(size_range[0], size_range[1])])
         plt.savefig(figname, dpi=900, facecolor='white',
                     bbox_inches='tight')
 
@@ -636,7 +647,7 @@ class LongfinBarMaps(object):
         return
     
     
-    def get_file_BW_data(self,years,size_range):
+    def get_file_BW_data(self,year,size_range):
         '''
         Get Box whisker data from long file
         Under Construction, do not use yet
@@ -811,7 +822,7 @@ class LongfinBarMaps(object):
         
         barxy = np.zeros((len(site_names),2),np.float64)
         for s,site in enumerate(site_names):
-            barxy[s] = utm_dict[site]
+            barxy[s] = self.utm_dict[site]
         
         return barxy
 
@@ -864,24 +875,27 @@ class LongfinBarMaps(object):
 if __name__ == '__main__':
     # test for single predicted distribution plot
     test_pred = False #Out of Order
-    obs_bar = True 
+    obs_bar = True
     obs_boxwhisker = True
     test_obs_vs_pred = False #Out of Order
     test_metrics = False #Out of Order
 
+    year = 2016 #keep to one year for now, multiyear support coming
+    size_range = [12, 25] #inclusive range for the mm values. so min and max values are included in totals
+    surveys = [1,2,3,4,5,6,7,8,9]
+
     run_dir = r'J:\Longfin\bar_plots\FISH_PTM'
     grd_file = os.path.join(run_dir, 'ptm.grd')
-    cbm = LongfinBarMaps(run_dir, grd_file)
+    cbm = LongfinBarMaps(run_dir, grd_file, year)
     bm_inputs = cbm.get_inputs()
     fig_dir = '.'
-    years = [2013]
-    surveys = [1,2,3,4,5,6,7,8,9]
+    
     if obs_bar:
-        figname = os.path.join(fig_dir, 'obs_Bar_Plots.png')
-        cbm.plot_map_obs(years, figname, surveys)
+        figname = os.path.join(fig_dir, 'obs_Bar_Plots')
+        cbm.plot_map_obs(figname, size_range, surveys)
     if obs_boxwhisker:
-        figname = os.path.join(fig_dir, 'obs_Box_Whisker.png')
-        cbm.plot_obs_boxwhisker(years, figname, surveys)
+        figname = os.path.join(fig_dir, 'obs_Box_Whisker')
+        cbm.plot_obs_boxwhisker(figname, size_range, surveys)
     if test_pred:
         model = 'FISH-PTM'
         gname = 'tmd_Sac'
