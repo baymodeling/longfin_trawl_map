@@ -25,7 +25,7 @@ import Longfin_Plot_Utils
 # - add "landward" region to ptm
 
 
-class LongfinBarMaps(object):
+class LongfinMaps(object):
 
     def __init__(self,
                  run_dir,
@@ -446,7 +446,7 @@ if __name__ == '__main__':
 
     run_dir = r'J:\Longfin\bar_plots\FISH_PTM'
     grd_file = os.path.join(run_dir, 'ptm.grd')
-    cbm = LongfinBarMaps(run_dir, grd_file, year)
+    cbm = LongfinMaps(run_dir, grd_file, year)
 #     bm_inputs = cbm.get_inputs()
     fig_dir = '.'
     
