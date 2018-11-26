@@ -5,7 +5,7 @@ Created on Nov 21, 2018
 '''
 
 
-from Longfin_bar_maps import LongfinBarMaps
+from Longfin_Plotter import LongfinMaps
 import os
 
 years = [2012, 2013, 2016, 2017]
@@ -14,6 +14,7 @@ surveys = [1,2,3,4,5,6,7,8,9]
 BW_paths = [r"J:\Longfin\bar_plots\20mm_quantiles_small_larvae_YEAR.csv",
             r"J:\Longfin\bar_plots\20mm_quantiles_larvae_YEAR.csv"]
 longfile_path = r"J:\Longfin\bar_plots\20mm_trawl_summary.csv"
+static_volumes = r"C:\git\longfin_trawl_map\static_volumes_1.25m_NAVD.csv"
 
 run_dir = r'J:\Longfin\bar_plots\FISH_PTM'
 grd_file = os.path.join(run_dir, 'ptm.grd')
@@ -21,16 +22,15 @@ fig_dir = '.'
 
 for year in years:
     for i, size_range in enumerate(sizes):
-        cbm = LongfinBarMaps(run_dir, grd_file, year)
-        bm_inputs = cbm.get_inputs()
+        cbm = LongfinMaps(run_dir, grd_file, year)
         #make bar plots
         figname = os.path.join(fig_dir, 'obs_Bar_Plots')
         print year, size_range, longfile_path
-        cbm.plot_map_obs(longfile_path, figname, size_range, surveys)
+        cbm.make_Obs_Barplot(longfile_path, figname, size_range, surveys, static_volumes)
         #make boxwhisker
         BW_path = BW_paths[i].replace('YEAR', str(year))
         figname = os.path.join(fig_dir, 'obs_Box_Whisker')
         print year, size_range, BW_path
-        cbm.plot_obs_boxwhisker(BW_path, figname, size_range, surveys)
+        cbm.make_precalc_BoxWhiskerPlot(BW_path, figname, size_range, surveys, static_volumes)
         
 print 'done!'
