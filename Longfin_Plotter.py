@@ -9,13 +9,13 @@ import pylab
 import matplotlib.pyplot as plt
 import pdb
 from datetime import datetime as dt
+import math
 # import camt_region_dicts
 from stompy.grid import unstructured_grid
 from rmapy.utils.gis import polygons_w_attributes_from_shp as polys_from_shp
 import fish_ptm_results
 import map_w_bars
 import map_w_boxes
-from datetime import datetime as dtime
 import Longfin_Plot_Utils
 
 
@@ -93,6 +93,14 @@ class LongfinMaps(object):
         return
     
 ### ~~~~~~~~~~~~~~~~ DATA WRANGLING ~~~~~~~~~~~~~~~~ ###
+    def check_runtype(self):
+        accepted_runtypes = {'sls':1000., 
+                             '20mm':10000.}
+        while self.runtype.lower() not in accepted_runtypes.keys():
+            self.runtype = raw_input('Run type of {0} not support. Please enter a supported run type listed here: {1}'.format(self.runtype, ', '.join(accepted_runtypes.keys())))
+        self.runtype = self.runtype.lower()
+        self.density_units = accepted_runtypes[self.runtype]
+
     def findNoData(self, Surveys):
         regions = self.poly_names
         labels = np.chararray((len(regions), len(Surveys)))
@@ -152,7 +160,7 @@ class LongfinMaps(object):
             obs_vol[poly_idx][bar_idx] += cur_vol
             
         with open('Obs_data_output_{0}_{1}mm-{2}mm.csv'.format(year, size_range[0], size_range[1]), 'wb') as outtext:    
-            outtext.write('region,year,survey,fish count,volume per Survey,Density in 10000 fish per m3,Region Volume,Reg Abundance\n')
+            outtext.write('region,year,survey,fish count,volume per Survey,Density in {0} fish per m3,Region Volume,Reg Abundance\n'.format(self.density_units))
             for i, region in enumerate(self.poly_names):
 #                 print region
                 vol_file_idx = np.where(self.obs_static_vol['region_name'].values == region.replace('_',' '))[0][0]
@@ -162,10 +170,91 @@ class LongfinMaps(object):
                     obs_density[i][j] = survey_cnt / obs_vol[i][j] 
                     reg_abundance[i][j] = obs_density[i][j] * region_vol
                     reg_abundance = np.nan_to_num(reg_abundance)
-                    outline = ','.join([str(r) for r in [region, year, j+1, survey_cnt, obs_vol[i][j], obs_density[i][j] * 10000, region_vol, reg_abundance[i][j], '\n']])
+                    outline = ','.join([str(r) for r in [region, year, j+1, survey_cnt, obs_vol[i][j], obs_density[i][j] * self.density_units, region_vol, reg_abundance[i][j], '\n']])
                     outtext.write(outline)
         
         return reg_abundance
+    
+    def get_Cohort_Data(self, year, Surveys, size_range):
+        '''
+        structure = [Region1[[surv1, sizes, dates], [surv2, sizes, dates]], Region2[[surv1, sizes, dates], [surv2, sizes, dates]]]
+        example: The amount of grown in 14 days is 14 days*0.14 mm/day = 1.96 mm
+        '''
+#         valid_idx = [r for r, date in enumerate(self.obs_df['Year'].values) if date == year and self.obs_df['Survey'][r] in Surveys]
+        
+        coh_count = np.zeros((len(self.poly_names),len(Surveys)),np.float64)
+        coh_vol = np.zeros((len(self.poly_names), len(Surveys)),np.float64)
+        coh_density = np.zeros((len(self.poly_names),len(Surveys)),np.float64)
+        coh_abundance = np.zeros((len(self.poly_names),len(Surveys)),np.float64)
+        coh_dates = np.zeros((len(self.poly_names),len(Surveys)),dtype=object)
+        coh_sizes = np.zeros((len(self.poly_names),len(Surveys)),dtype=object)
+        
+        orig_size_range = size_range[:]
+        #deal with dates and sizes first
+        for reg_idx, region in enumerate(self.poly_names):
+            in_reg_idx = [r for r, date in enumerate(self.obs_df['Year'].values) if date == year and self.obs_df['lfs_region'][r] == region and self.obs_df['Survey'][r] in Surveys]
+            size_range = orig_size_range[:]
+            for surv_idx, surv in enumerate(Surveys): #go through prescribed surveys
+                in_surv_idx = [r for r in in_reg_idx if self.obs_df['Survey'][r] == surv] #get each index in prev list where survey is current survey
+                for idx in in_surv_idx:
+                    cur_date = dt.strptime(self.obs_df['SampleDate'][idx], '%m/%d/%Y 0:00')
+                    if isinstance(coh_dates[reg_idx][surv_idx], int):
+                        coh_dates[reg_idx][surv_idx] = [cur_date]
+                    else:
+                        coh_dates[reg_idx][surv_idx] = np.append(coh_dates[reg_idx][surv_idx], cur_date)
+                
+                if len(in_surv_idx) > 0:
+                    coh_dates[reg_idx][surv_idx] = (min(coh_dates[reg_idx][surv_idx]), max(coh_dates[reg_idx][surv_idx]))
+                    if surv_idx == 0:
+                        coh_sizes[reg_idx][surv_idx] = size_range[:]
+                    else:
+                        last_date = coh_dates[reg_idx][surv_idx -1][1]
+                        if last_date != np.nan:
+                            time_elapsed = coh_dates[reg_idx][surv_idx][0] - last_date
+                            growth = time_elapsed.days * 0.14
+                            growth_round = int(math.ceil(growth))
+                            size_range[0] += growth_round
+                            size_range[1] += growth_round
+                            coh_sizes[reg_idx][surv_idx] = size_range[:]
+                        else:
+                            coh_sizes[reg_idx][surv_idx] = size_range[:]
+                else:
+                    coh_sizes[reg_idx][surv_idx] = size_range[:]
+                    coh_dates[reg_idx][surv_idx] = (np.nan, np.nan)
+
+        
+    
+        for reg_idx, region in enumerate(self.poly_names): #go by each region
+            #find index where the year, region, and listed surveys
+            in_reg_idx = [r for r, date in enumerate(self.obs_df['Year'].values) if date == year and self.obs_df['lfs_region'][r] == region and self.obs_df['Survey'][r] in Surveys]
+            for surv_idx, surv in enumerate(Surveys): #go through prescribed surveys
+                in_surv_idx = [r for r in in_reg_idx if self.obs_df['Survey'][r] == surv] #get each index in prev list where survey is current survey
+                for idx in in_surv_idx:
+                    cur_vol = self.obs_df['Volume'].values[idx]
+                    if isinstance(coh_sizes[reg_idx][surv_idx], str):
+                        fish_counts = self.countAllFishSizes(idx)
+                    else:
+                        fish_counts = self.countSomeFishSizes(idx, coh_sizes[reg_idx][surv_idx])    
+                         
+                    coh_count[reg_idx][surv_idx] += fish_counts
+                    coh_vol[reg_idx][surv_idx] += cur_vol   
+                     
+        with open('Cohort_data_{0}_output_{1}.csv'.format(self.runtype.upper(), year), 'wb') as outtext:    
+            outtext.write('region,survey,Date_Start,Date_End,year,size min,size max,fish count,volume per Survey,Density in {0} fish per m3,Region Volume,Reg Abundance\n'.format(self.density_units))
+            for reg_idx, region in enumerate(self.poly_names):
+                vol_file_idx = np.where(self.obs_static_vol['region_name'].values == region.replace('_',' '))[0][0]
+                region_vol = self.obs_static_vol['vol_top_999_m'][vol_file_idx]
+                for surv_idx, surv_count in enumerate(coh_count[reg_idx]):
+                    coh_density[reg_idx][surv_idx] = surv_count / coh_vol[reg_idx][surv_idx] 
+                    coh_abundance[reg_idx][surv_idx] = coh_density[reg_idx][surv_idx] * region_vol
+                    coh_abundance = np.nan_to_num(coh_abundance)
+                    try:
+                        outline = ','.join([str(r) for r in [region, surv_idx+1,coh_dates[reg_idx][surv_idx][0].strftime('%m/%d'),coh_dates[reg_idx][surv_idx][1].strftime('%m/%d'), year, coh_sizes[reg_idx][surv_idx][0], coh_sizes[reg_idx][surv_idx][1], surv_count, coh_vol[reg_idx][surv_idx], coh_density[reg_idx][surv_idx] * self.density_units, region_vol, coh_abundance[reg_idx][surv_idx], '\n']])
+                    except AttributeError:
+                        outline = ','.join([str(r) for r in [region, surv_idx+1,'nan','nan', year, coh_sizes[reg_idx][surv_idx][0],coh_sizes[reg_idx][surv_idx][1], surv_count, coh_vol[reg_idx][surv_idx], coh_density[reg_idx][surv_idx] * self.density_units, region_vol, coh_abundance[reg_idx][surv_idx], '\n']])
+                    outtext.write(outline)
+
+        return coh_abundance
     
     def countAllFishSizes(self, index):
         '''add fish at each mm size to one total
@@ -191,6 +280,28 @@ class LongfinMaps(object):
                 continue
         return total
     
+    def get_Plot_Scale(self, data, plotType):
+        
+        if plotType == 'BoxWhisker':
+            meds = []
+            for region in data:
+                for surv in region:
+                    meds.append(surv['med'])
+            max_med = max(meds)
+            len_max = (len(str(max_med).split('.')[0]) - 2) * -1
+            scaler = round(max_med, len_max)
+            
+        elif plotType == 'Bar':
+            maxes = []
+            for region in data:
+                maxes.append(max(region))
+            largest_max = max(maxes)
+            len_max = (len(str(largest_max).split('.')[0]) - 2) * -1
+            scaler = round(largest_max, len_max)
+
+            
+        return scaler
+    
     def Abundance_to_Density(self, obs_Data, size_range):
         '''
         Converts Abundance to density (fish per 10,000 m3)
@@ -204,7 +315,7 @@ class LongfinMaps(object):
                 for s, surv in enumerate(obs_Data[i]):
                     obs_density[i][s] = {}
                     for key in surv.keys():
-                        obs_density[i][s][key] = (surv[key] / region_vol) * 10000.
+                        obs_density[i][s][key] = (surv[key] / region_vol) * self.density_units
             self.write_Box_Stats(obs_density, 'Density_BoxWhisker_Stats_{0}_{1}mm-{2}mm.csv'.format(self.year, size_range[0], size_range[1]))
              
         elif self.datatype == 'Observed':
@@ -213,7 +324,7 @@ class LongfinMaps(object):
                 vol_file_idx = np.where(self.obs_static_vol['region_name'].values == reg.replace('_',' '))[0][0]
                 region_vol = self.obs_static_vol['vol_top_999_m'][vol_file_idx]
                 for s, surv in enumerate(obs_Data[i]):
-                    obs_density[i][s] = (surv / region_vol) * 10000.
+                    obs_density[i][s] = (surv / region_vol) * self.density_units
                     
         else:
             print 'Undefined type for converting data.'
@@ -289,8 +400,9 @@ class LongfinMaps(object):
                 item["whislo"] = self.obs_BW_file['q5'].values[idx]
                 item["whishi"] = self.obs_BW_file['q95'].values[idx]
                 region_stats[reg_idx][surv_idx] = item
-        self.write_Box_Stats(region_stats, 'BoxWhisker_Stats_{0}.csv'.format(self.year))
         return region_stats
+        self.write_Box_Stats(region_stats, 'BoxWhisker_Stats_{0}.csv'.format(self.year))
+        
     
     def write_Box_Stats(self, stats, filename):
         with open(filename, 'wb') as g:
@@ -307,41 +419,53 @@ class LongfinMaps(object):
          many surveys is untested and may look really ugly. Consider keeping 9 surveys max.
         
         '''
+        self.check_runtype()
         self.datatype = 'Observed' #set this parameter for run specific functions
         self.obs_df = pd.read_csv(longfile_path, parse_dates=True)
         self.obs_static_vol = pd.read_csv(static_volumes_file, parse_dates=True)
-        fig, ax = Longfin_Plot_Utils.draw_water_and_polys(self.grd, self.plot_poly_dict, self.xylims)
+        
         bars = []
         for num in Surveys:
             bars.append('Survey {0}'.format(num))
         barboxsize = [10000.,10000.] #determines size of plots. Don't touch.
-        leg_args = {'ylabel':'Density',
-                    'bars':bars,
-                    'max':''}
-        
-        if leg_args['ylabel'] == 'Density':
-            leg_args['max'] = self.max_den[self.year]
-        elif leg_args['ylabel'] == 'Abundance':
-            leg_args['max'] = self.max_ab[self.year]
+        plot_types = ['Density', 'Abundance']
+        for plot_type in plot_types:
             
-        plt.title('Observed {0} {1}'.format(leg_args['ylabel'], self.year))
-        
-        
-        # read observed counts
-        obs_data = self.get_Obs_data(self.year, Surveys, size_range)
-        
-        if leg_args['ylabel'] == 'Density':
-            obs_data = self.Abundance_to_Density(obs_data, size_range) #convert abundance data to density
-        
-        barxy = self.findSiteLoc(self.poly_names) #get xy for each site
-        labels = self.findNoData(Surveys) #find correct labels for surveys with no data
-        Longfin_Plot_Utils.plot_bars(ax, fig, obs_data, barxy, barboxsize, self.xylims,
-                             leg_args, frac=False, labels=labels)
-        figname = '_'.join([figname, str(self.year), '{0}mm-{1}mm.png'.format(size_range[0], size_range[1])])
-        plt.savefig(figname, dpi=900, facecolor='white',bbox_inches='tight')
-
-        plt.close()
-        plt.clf()
+            fig, ax = Longfin_Plot_Utils.draw_water_and_polys(self.grd, self.plot_poly_dict, self.xylims)
+            leg_args = {'ylabel':plot_type,
+                        'bars':bars,
+                        'max':''}
+            
+#             if leg_args['ylabel'] == 'Density':
+#                 leg_args['max'] = self.max_den[self.year]
+#             elif leg_args['ylabel'] == 'Abundance':
+#                 leg_args['max'] = self.max_ab[self.year]
+            if leg_args['ylabel'] == 'Density':
+                plt.title('{0} Estimated Fish per {1} cubic meter {2}'.format(self.runtype.upper(), int(self.density_units), self.year))
+            elif leg_args['ylabel'] == 'Abundance':
+                plt.title('{0} Fish Abundance {1} '.format(self.runtype.upper(), self.year))
+                
+            
+#             plt.title('Observed {0} {1}'.format(leg_args['ylabel'], self.year))
+            
+            
+            # read observed counts
+            obs_data = self.get_Obs_data(self.year, Surveys, size_range)
+            
+            if leg_args['ylabel'] == 'Density':
+                obs_data = self.Abundance_to_Density(obs_data, size_range) #convert abundance data to density
+            
+            barxy = self.findSiteLoc(self.poly_names) #get xy for each site
+            labels = self.findNoData(Surveys) #find correct labels for surveys with no data
+            leg_args['max'] = self.get_Plot_Scale(obs_data, 'Bar')
+            print leg_args['max'], obs_data
+            Longfin_Plot_Utils.plot_bars(ax, fig, obs_data, barxy, barboxsize, self.xylims,
+                                 leg_args, frac=False, labels=labels)
+            new_figname = '_'.join([figname, self.runtype.upper(), str(self.year), str(leg_args['ylabel']), '{0}mm-{1}mm.png'.format(size_range[0], size_range[1])])
+            plt.savefig(new_figname, dpi=900, facecolor='white',bbox_inches='tight')
+    
+            plt.close()
+            plt.clf()
 
         return
 
@@ -356,44 +480,174 @@ class LongfinMaps(object):
         self.datatype = 'Precalculated' #set this parameter for run specific functions
         self.obs_BW_file = pd.read_csv(data_path, parse_dates=True)
         self.obs_static_vol = pd.read_csv(static_volumes_file, parse_dates=True)
-        fig, ax = Longfin_Plot_Utils.draw_water_and_polys(self.grd, self.plot_poly_dict, self.xylims)
         boxes = []
         
         for num in Surveys:
             boxes.append('Survey {0}'.format(num))
 
-        leg_args = {'ylabel':'Abundance',
-                    'boxes':boxes,
-                    'max':''}
+        plot_types = ['Density', 'Abundance']
+        for plot_type in plot_types:
+            
+            fig, ax = Longfin_Plot_Utils.draw_water_and_polys(self.grd, self.plot_poly_dict, self.xylims)
+            leg_args = {'ylabel':plot_type,
+                        'bars':boxes,
+                        'max':''}
+            
+#             if leg_args['ylabel'] == 'Density':
+#                 leg_args['max'] = self.max_den[self.year]
+#             elif leg_args['ylabel'] == 'Abundance':
+#                 leg_args['max'] = self.max_ab[self.year]
+            if leg_args['ylabel'] == 'Density':
+                plt.title('{0} Estimated Fish per {1} cubic meter {2}'.format(self.runtype.upper(), int(self.density_units), self.year))
+            elif leg_args['ylabel'] == 'Abundance':
+                plt.title('{0} Fish Abundance {1} '.format(self.runtype.upper(), self.year))
         
-        if leg_args['ylabel'] == 'Density':
-            leg_args['max'] = self.max_den[self.year]
-        elif leg_args['ylabel'] == 'Abundance':
-            leg_args['max'] = self.max_ab[self.year]
+    #         if leg_args['ylabel'] == 'Density':
+    #             leg_args['max'] = self.max_den[self.year]
+    #         elif leg_args['ylabel'] == 'Abundance':
+    #             leg_args['max'] = self.max_ab[self.year]
 
         
-        plt.title('Observed {0} {1}'.format(leg_args['ylabel'], self.year))
-        barboxsize = [10000.,10000.]
-        
-        obs_data = self.get_precalc_BW_data(Surveys)
-        barxy = self.findSiteLoc(self.poly_names)
-        labels = self.findNoData(Surveys)
-        
-        if leg_args['ylabel'] == 'Density':
-            obs_data = self.Abundance_to_Density(obs_data, size_range) #convert abundance data to density
-        Longfin_Plot_Utils.plot_boxes(ax, fig, obs_data, barxy, barboxsize, self.xylims,
-                             leg_args, frac=False, labels=labels)
-
-        figname = '_'.join([figname, str(self.year), '{0}mm-{1}mm.png'.format(size_range[0], size_range[1])])
-        plt.savefig(figname, dpi=900, facecolor='white',
-                    bbox_inches='tight')
-
-        plt.close()
-        plt.clf()
+#             plt.title('Observed {0} {1}'.format(leg_args['ylabel'], self.year))
+            barboxsize = [10000.,10000.]
+            
+            obs_data = self.get_precalc_BW_data(Surveys)
+            barxy = self.findSiteLoc(self.poly_names)
+            labels = self.findNoData(Surveys)
+            
+            if leg_args['ylabel'] == 'Density':
+                obs_data = self.Abundance_to_Density(obs_data, size_range) #convert abundance data to density
+                
+            leg_args['max'] = self.get_Plot_Scale(obs_data, 'BoxWhisker')
+            Longfin_Plot_Utils.plot_boxes(ax, fig, obs_data, barxy, barboxsize, self.xylims,
+                                 leg_args, frac=False, labels=labels)
+    
+            new_figname = '_'.join([figname, self.runtype.upper(), str(self.year), str(leg_args['ylabel']), '{0}mm-{1}mm.png'.format(size_range[0], size_range[1])])
+            plt.savefig(new_figname, dpi=900, facecolor='white',bbox_inches='tight')
+    
+            plt.close()
+            plt.clf()
 
         return
     
+    def make_Cohort_Plot(self, longfile_path, figname, size_range, Surveys,static_volumes_file):
+        '''UNDER CONSTRUCTION
+        Create a plot for cohort growth. cohort growth shows a gradual increase of .14 * days between surveys
+        this growth is added to the size range, progressively growing as time goes on.
+        '''
+        self.check_runtype()
+        self.datatype = 'Observed' #set this parameter for run specific functions
+        self.obs_df = pd.read_csv(longfile_path, parse_dates=True)
+        self.obs_static_vol = pd.read_csv(static_volumes_file, parse_dates=True)
+        
+        bars = []
+        for num in Surveys:
+            bars.append('Survey {0}'.format(num))
+        barboxsize = [10000.,10000.] #determines size of plots. Don't touch.
+#         plot_types = ['Density', 'Abundance']
+        plot_types = ['Abundance'] #Just abundance atm...
+        for plot_type in plot_types:
+            
+            fig, ax = Longfin_Plot_Utils.draw_water_and_polys(self.grd, self.plot_poly_dict, self.xylims)
+            leg_args = {'ylabel':plot_type,
+                        'bars':bars,
+                        'max':''}
+            
+#             if leg_args['ylabel'] == 'Density':
+#                 leg_args['max'] = self.max_den[self.year]
+#             elif leg_args['ylabel'] == 'Abundance':
+#                 leg_args['max'] = self.max_ab[self.year]
+            if leg_args['ylabel'] == 'Density':
+                plt.title('{0} Estimated Fish per {1} cubic meter {2}'.format(self.runtype.upper(), int(self.density_units), self.year))
+            elif leg_args['ylabel'] == 'Abundance':
+                plt.title('Longfin Smelt Survey {0} {1}mm to {2}mm {3} Cohort {4} {5} '.format(Surveys[0], size_range[0], size_range[1], self.runtype.upper(), plot_type, self.year))
+                
+            
+#             plt.title('Observed {0} {1}'.format(leg_args['ylabel'], self.year))
+            
+            
+            # read observed counts
+            coh_data = self.get_Cohort_Data(self.year, Surveys, size_range)
+            
+            if leg_args['ylabel'] == 'Density':
+                coh_data = self.Abundance_to_Density(coh_data, size_range) #convert abundance data to density
+            
+            barxy = self.findSiteLoc(self.poly_names) #get xy for each site
+            labels = self.findNoData(Surveys) #find correct labels for surveys with no data
+            leg_args['max'] = self.get_Plot_Scale(coh_data, 'Bar')
+            Longfin_Plot_Utils.plot_bars(ax, fig, coh_data, barxy, barboxsize, self.xylims,
+                                 leg_args, frac=False, labels=labels)
+            new_figname = '_'.join([figname, self.runtype.upper(), str(self.year), str(leg_args['ylabel']), '{0}mm-{1}mm.png'.format(size_range[0], size_range[1])])
+            plt.savefig(new_figname, dpi=900, facecolor='white',bbox_inches='tight')
     
+            plt.close()
+            plt.clf()
+
+        return
+    
+    def make_MultiCohort_Plot(self, longfile_path1, longfile_path2, figname, size_range, Surveys,static_volumes_file):
+        '''UNDER CONSTRUCTION
+        Create a plot for cohort growth. cohort growth shows a gradual increase of .14 * days between surveys
+        this growth is added to the size range, progressively growing as time goes on.
+        includes 2 data sources
+        '''
+        self.check_runtype()
+        self.datatype = 'Observed' #set this parameter for run specific functions
+        self.obs_df1 = pd.read_csv(longfile_path1, parse_dates=True)
+        self.obs_df2 = pd.read_csv(longfile_path2, parse_dates=True)
+        self.obs_static_vol = pd.read_csv(static_volumes_file, parse_dates=True)
+        
+        bars = []
+        for num in Surveys:
+            bars.append(self.runtype1, '{0}'.format(num))
+        for num in Surveys:
+            bars.append(self.runtype2, '{0}'.format(num))
+        barboxsize = [10000.,10000.] #determines size of plots. Don't touch.
+#         plot_types = ['Density', 'Abundance']
+        plot_types = ['Abundance'] #Just abundance atm...
+        for plot_type in plot_types:
+            
+            fig, ax = Longfin_Plot_Utils.draw_water_and_polys(self.grd, self.plot_poly_dict, self.xylims)
+            leg_args = {'ylabel':plot_type,
+                        'bars':bars,
+                        'max':''}
+            
+#             if leg_args['ylabel'] == 'Density':
+#                 leg_args['max'] = self.max_den[self.year]
+#             elif leg_args['ylabel'] == 'Abundance':
+#                 leg_args['max'] = self.max_ab[self.year]
+            if leg_args['ylabel'] == 'Density':
+                plt.title('{0} Estimated Fish per {1} cubic meter {2}'.format(self.runtype.upper(), int(self.density_units), self.year))
+            elif leg_args['ylabel'] == 'Abundance':
+                plt.title('Longfin Smelt Survey {0} {1}mm to {2}mm {3} Cohort {4} {5} '.format(Surveys[0], size_range[0], size_range[1], self.runtype.upper(), plot_type, self.year))
+                
+            
+#             plt.title('Observed {0} {1}'.format(leg_args['ylabel'], self.year))
+            
+            
+            # read observed counts
+            self.obs_df =  self.obs_df1 #set this just for temp reasons
+            coh_data1 = self.get_Cohort_Data(self.year, Surveys, size_range)
+            self.obs_df =  self.obs_df2 #set this just for temp reasons
+            coh_data2 = self.get_Cohort_Data(self.year, Surveys, size_range)
+#             coh_data = np.append(coh_data1, coh_data2) #combine the data
+            
+            if leg_args['ylabel'] == 'Density':
+                coh_data1 = self.Abundance_to_Density(coh_data1, size_range) #convert abundance data to density
+                coh_data2 = self.Abundance_to_Density(coh_data2, size_range) #convert abundance data to density
+            
+            barxy = self.findSiteLoc(self.poly_names) #get xy for each site
+            labels = self.findNoData(Surveys) #find correct labels for surveys with no data
+            leg_args['max'] = self.get_Plot_Scale(coh_data, 'Bar')
+            Longfin_Plot_Utils.plot_bars(ax, fig, coh_data, barxy, barboxsize, self.xylims,
+                                 leg_args, frac=False, labels=labels)
+            new_figname = '_'.join([figname, self.runtype.upper(), str(self.year), str(leg_args['ylabel']), '{0}mm-{1}mm.png'.format(size_range[0], size_range[1])])
+            plt.savefig(new_figname, dpi=900, facecolor='white',bbox_inches='tight')
+    
+            plt.close()
+            plt.clf()
+
+        return
 
     
     def plot_precalc_Boxwhisker(self, obs_data, fig_name):
@@ -437,12 +691,14 @@ class LongfinMaps(object):
 if __name__ == '__main__':
     # test for single predicted distribution plot
 
-    obs_bar = True
-    obs_boxwhisker = True
+    obs_bar = False
+    obs_boxwhisker = False
+    cohort = False
+    multicohort = True
 
-    year = 2012 #keep to one year for now, multiyear support coming
-    size_range = [12, 25] #inclusive range for the mm values. so min and max values are included in totals
-    surveys = [1,2,3,4,5,6,7,8,9]
+    year = 2013 #keep to one year for now, multiyear support coming
+    size_range = [6, 8] #inclusive range for the mm values. so min and max values are included in totals
+    surveys = [3,4,5,6]
 
     run_dir = r'J:\Longfin\bar_plots\FISH_PTM'
     grd_file = os.path.join(run_dir, 'ptm.grd')
@@ -450,17 +706,33 @@ if __name__ == '__main__':
 #     bm_inputs = cbm.get_inputs()
     fig_dir = '.'
     
+    runtype = 'SLS' #sls or 20mm supported. Changes in Density calcs and titles
+    
     if obs_bar:
         figname = os.path.join(fig_dir, 'obs_Bar_Plots')
         obs_data = r"J:\Longfin\bar_plots\20mm_trawl_summary.csv"
         static_volumes = r"C:\git\longfin_trawl_map\static_volumes_1.25m_NAVD.csv"
+        cbm.runtype = runtype
         cbm.make_Obs_Barplot(obs_data, figname, size_range, surveys, static_volumes)
     if obs_boxwhisker:
         figname = os.path.join(fig_dir, 'obs_Box_Whisker')
-        obs_data = r"J:\Longfin\bar_plots\20mm_quantiles_larvae_{0}.csv".format(year)
+        obs_data = r"J:\Longfin\bar_plots\SLS_quantiles_12mm-25mm_2012.csv"
         static_volumes = r"C:\git\longfin_trawl_map\static_volumes_1.25m_NAVD.csv"
-#         obs_data = r"J:\Longfin\bar_plots\20mm_quantiles_small_larvae_{0}.csv".format(year)
+        cbm.runtype = runtype
         cbm.make_precalc_BoxWhiskerPlot(obs_data, figname, size_range, surveys, static_volumes)
-
+    if cohort:
+        figname = os.path.join(fig_dir, 'Cohort_Plots')
+        obs_data = r"J:\Longfin\bar_plots\SLS_trawl_summary.csv"
+        static_volumes = r"C:\git\longfin_trawl_map\static_volumes_1.25m_NAVD.csv"
+        cbm.runtype = runtype
+        cbm.make_Cohort_Plot(obs_data, figname, size_range, surveys, static_volumes)
+    if multicohort:
+        figname = os.path.join(fig_dir, 'MultiCohort_Plots')
+        obs_data1 = r"J:\Longfin\bar_plots\SLS_trawl_summary.csv"
+        obs_data2 = r"J:\Longfin\bar_plots\20mm_trawl_summary.csv"
+        static_volumes = r"C:\git\longfin_trawl_map\static_volumes_1.25m_NAVD.csv"
+        cbm.runtype1 = 'SLS'
+        cbm.runtype2 = '20mm'
+        cbm.make_MultiCohort_Plot(obs_data1, obs_data2, figname, size_range, surveys, static_volumes)
 
 

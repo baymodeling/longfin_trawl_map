@@ -352,6 +352,6 @@ def plotBarGraph(xys, bar_vals, fig, y_range, legend=False, alt_hatch=False,
         rects = ax.patches
         for rect, label in zip(rects, tot_labels):
             height = rect.get_height()
-            ax.text(rect.get_x() + rect.get_width() / 2, height + 5, label,
+            ax.text(rect.get_x() + rect.get_width() / 2, height + height*.1, label,
                     ha='center', va='bottom', color='red', fontsize=7)
     
