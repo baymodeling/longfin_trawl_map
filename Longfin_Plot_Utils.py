@@ -362,7 +362,19 @@ def plotBarGraph(xys, bar_vals, fig, y_range, plotType, legend=False, alt_hatch=
     else:
         ax.xaxis.set_visible(False)
         ax.yaxis.set_visible(False)
-        ax.set_ylabel(ylabel,rotation=0)
+#         ax.spines['right'].set_visible(False)
+#         ax.spines['top'].set_visible(False)
+#         ax.spines['left'].set_visible(False)
+#         plt.tick_params(
+#             axis='both',          # changes apply to the x-axis
+#             which='both',      # both major and minor ticks are affected
+#             bottom=False,      # ticks along the bottom edge are off
+#             top=False,
+#             left=False,         # ticks along the edge are off
+#             labelbottom=False,
+#             labelleft=False,
+#             labeltop=False) # labels along the bottom edge are off
+#         ax.set_ylabel(ylabel,rotation=90)
 #     if plotType == 'Log':
 # #         ax.set_yscale("log", nonposy='clip')
 #         plt.yscale('log')

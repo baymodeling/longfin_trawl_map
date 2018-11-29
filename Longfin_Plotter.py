@@ -292,6 +292,7 @@ class LongfinMaps(object):
                         coh_dates[reg_idx][surv_idx] = np.append(coh_dates[reg_idx][surv_idx], cur_date)
                 
                 if len(in_surv_idx) > 0:
+                    
                     coh_dates[reg_idx][surv_idx] = (min(coh_dates[reg_idx][surv_idx]), max(coh_dates[reg_idx][surv_idx]))
                     if surv_idx == 0:
                         coh_sizes[reg_idx][surv_idx] = size_range[:]
@@ -332,7 +333,7 @@ class LongfinMaps(object):
                 coh_dates = np.column_stack((coh_dates, dates))
                 coh_sizes = np.column_stack((coh_sizes, sizes))       
                 
-        return coh_dates, coh_sizes
+        return coh_dates
                 
         
     def get_multiCohort_Data(self, year, Surveys, size_range):
@@ -368,6 +369,7 @@ class LongfinMaps(object):
         surv_split = len(Surveys[0])
         for reg_idx, reg in enumerate(coh_dates):
             if not isinstance(reg[surv_split][0], float) and not isinstance(reg[surv_split-1][1], float):
+                hatch_date = reg[0][0] #get hatch date if available
                 time_elapsed = reg[surv_split][0] - reg[surv_split-1][1]
                 growth = time_elapsed.days * 0.14
                 growth_round = int(math.ceil(growth))
@@ -378,7 +380,17 @@ class LongfinMaps(object):
                         size_range[0] += total_shift
                         size_range[1] += total_shift
                         coh_sizes[reg_idx][surv_idx] = size_range[:]
-
+            if not isinstance(reg[surv_split][0], float) and isinstance(reg[surv_split-1][1], float): #if cur data is good but prev is NAN
+                time_elapsed = reg[surv_split][0] - hatch_date
+                growth = time_elapsed.days * 0.14
+                growth_round = int(math.ceil(growth))
+                size_Range_offset = coh_sizes[reg_idx][surv_split-1][0] - coh_sizes[reg_idx][surv_split][0]
+                total_shift = growth_round + size_Range_offset
+                for surv_idx, size_range in enumerate(coh_sizes[reg_idx]):
+                    if surv_idx >= surv_split:
+                        size_range[0] += total_shift
+                        size_range[1] += total_shift
+                        coh_sizes[reg_idx][surv_idx] = size_range[:]
         
     
         for reg_idx, region in enumerate(self.poly_names): #go by each region
@@ -974,7 +986,7 @@ class LongfinMaps(object):
             # read observed counts
 #             self.obs_df =  self.obs_df1 #set this just for temp reasons
             coh_data = self.get_multiCohort_Data(self.year, self.multisurveys, size_range)
-            coh_surv_dates, coh_surv_sizes = self.get_Cohort_start_dates(self.year, self.multisurveys, size_range)
+            coh_surv_dates = self.get_Cohort_start_dates(self.year, self.multisurveys, size_range)
             
             pred_data = self.get_Predicted_data(coh_surv_dates)
             if leg_args['ylabel'] == 'Density':
@@ -991,7 +1003,6 @@ class LongfinMaps(object):
             self.obs_df = self.pred_data
             pred_labels = np.empty_like(pred_data)
             pred_labels[:] = ''
-            
             
             
 #             leg_args['max'] = self.get_Plot_Scale(coh_data, 'Log')
