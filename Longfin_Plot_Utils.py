@@ -230,7 +230,11 @@ def plot_bars(ax, fig, data, xy, boxsize, xylims, leg_args, frac=True,
     ax.set_aspect('equal', adjustable='box-forced')
     ax.xaxis.set_visible(False)
     ax.yaxis.set_visible(False)
-
+    plotType = leg_args['PlotType']
+    if 'obspred_label' in leg_args.keys():
+        ylabel = leg_args['obspred_label']
+    else:
+        ylabel = ''
     #Plots bar plots at given locations (x centered over point, y bottom at point)
     for p in range(num_plots):
         if np.isfinite(xy[p,0]):
@@ -240,11 +244,11 @@ def plot_bars(ax, fig, data, xy, boxsize, xylims, leg_args, frac=True,
             # Ben - what is this doing? Why does it need fig and not ax?
             fig_coords = fig.transFigure.inverted().transform(disp_coords)
             if len(labels) > 1:
-                plotBarGraph(fig_coords, data[p,:],fig, plot_range,
-                             alt_hatch=alt_hatch, labels=labels[p,:])
+                plotBarGraph(fig_coords, data[p,:],fig, plot_range, plotType,
+                             alt_hatch=alt_hatch, labels=labels[p,:], ylabel=ylabel)
             else:
-                plotBarGraph(fig_coords, data[p,:],fig, plot_range,
-                             alt_hatch=alt_hatch)
+                plotBarGraph(fig_coords, data[p,:],fig, plot_range, plotType,
+                             alt_hatch=alt_hatch, ylabel=ylabel)
             fig.canvas.draw()
     xy_leg = [589782.5317557553,4187778.3682879894] # move to main
     mod = len(leg_args['bars']) / 4
@@ -260,7 +264,7 @@ def plot_bars(ax, fig, data, xy, boxsize, xylims, leg_args, frac=True,
         bars=leg_args['bars']*2
     else:
         bars=leg_args['bars']
-    plotBarGraph(fig_coords, [plot_range[1]]*len(bars), fig, plot_range,
+    plotBarGraph(fig_coords, [plot_range[1]]*len(bars), fig, plot_range, plotType,
                  legend=True, alt_hatch=alt_hatch, 
                  xlabels=bars, ylabel=leg_args['ylabel'])
 
@@ -268,7 +272,7 @@ def plot_bars(ax, fig, data, xy, boxsize, xylims, leg_args, frac=True,
     return 
     
     
-def plotBarGraph(xys, bar_vals, fig, y_range, legend=False, alt_hatch=False,
+def plotBarGraph(xys, bar_vals, fig, y_range, plotType, legend=False, alt_hatch=False,
                  xlabels=[], ylabel=[], labels=[]):
     # Plots a bar graphs with the given bar names and values at the x,y coordinates of the Delta map.
     
@@ -292,6 +296,7 @@ def plotBarGraph(xys, bar_vals, fig, y_range, legend=False, alt_hatch=False,
     else:
 #         width = 1.
         width = .7
+
     ind = np.arange(len(tot_bar_vals))
     if legend:
         ind = np.arange(0, len(tot_bar_vals)* 10, 10)
@@ -316,7 +321,7 @@ def plotBarGraph(xys, bar_vals, fig, y_range, legend=False, alt_hatch=False,
 #     for nbv,bv in enumerate(tot_bar_vals):
 #         if bv > ymax:
 #             plt.annotate("%.0E"%(bv),[ind[nbv]-0.5,0.65*ymax],rotation=90)
-
+    
     if legend:
         ax.xaxis.set_visible(True)
         ax.yaxis.set_visible(True)
@@ -326,32 +331,46 @@ def plotBarGraph(xys, bar_vals, fig, y_range, legend=False, alt_hatch=False,
             xticks = ind
         ax.set_xticks(xticks)
         ax.set_xticklabels(xlabels,rotation=90,ha='center')
-        ax.set_yticks(ax.get_yticks()[::2])
-        ytick_max = int(y_range[1])/100000*100000
-        ax.set_yticks([0,ytick_max])
+#         ax.set_yticks(ax.get_yticks()[::2])
+#         ax.set_yticks(ax.get_yticks())
+#         ytick_max = int(y_range[1])/100000*100000
+#         ax.set_yticks([0,ymax])
+#         if plotType == 'Log':
+#             ticks = [0]
+#             tick = 10
+#             while tick < ymax:
+#                 ticks.append(tick)
+#                 tick *= 10
+#             ax.set_yticks(ticks)
+            
         try:
             ytick_max = int(y_range[1])/100000*100000
             ax.set_yticks([0,ytick_max])
             exponent = np.log10(ytick_max)
             if exponent - int(exponent) == 0.:
                 ax.set_yticklabels(['0','10$^%d$'%(exponent)])
+
         except OverflowError: #if the max is too small, you get an overflow error. then just use the normal number
             ytick_max = int(y_range[1])
             ax.set_yticks([0,ytick_max])
             ax.set_yticklabels(['0','{0}'.format(ytick_max)])
-#         exponent = np.log10(ytick_max)
-#         if exponent - int(exponent) == 0.:
-#             ax.set_yticklabels(['0','10$^%d$'%(exponent)])
+        exponent = np.log10(ytick_max)
+        if exponent - int(exponent) == 0.:
+            ax.set_yticklabels(['0','10$^%d$'%(exponent)])
         ax.set_ylim(y_range[0], ytick_max)
         ax.set_ylabel(ylabel)
     else:
         ax.xaxis.set_visible(False)
         ax.yaxis.set_visible(False)
-        
+        ax.set_ylabel(ylabel,rotation=0)
+#     if plotType == 'Log':
+# #         ax.set_yscale("log", nonposy='clip')
+#         plt.yscale('log')
     if len(tot_labels) > 0:
         rects = ax.patches
         for rect, label in zip(rects, tot_labels):
             height = rect.get_height()
-            ax.text(rect.get_x() + rect.get_width() / 2, height + height*.1, label,
+            ax.text(rect.get_x() + rect.get_width() / 2, height, label,
                     ha='center', va='bottom', color='red', fontsize=7)
+        
     

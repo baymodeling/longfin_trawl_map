@@ -1,6 +1,6 @@
 # Use for plotting SLS and 20mm survey data
 
-import os.path
+import os, sys
 import csv
 import numpy as np
 from scipy import stats
@@ -10,12 +10,8 @@ import matplotlib.pyplot as plt
 import pdb
 from datetime import datetime as dt
 import math
-# import camt_region_dicts
 from stompy.grid import unstructured_grid
 from rmapy.utils.gis import polygons_w_attributes_from_shp as polys_from_shp
-import fish_ptm_results
-import map_w_bars
-import map_w_boxes
 import Longfin_Plot_Utils
 
 
@@ -65,19 +61,19 @@ class LongfinMaps(object):
         
         self.utm_dict = {'Central_Delta_and_Franks_Tract':[618495.3074911481,4212214.95338295],
             'Upper_Sacramento_River':[629749.8528383253,4244678.154020051],
-            'North_and_South_Forks_Mokelumne_River':[636706.2529748471,4220063.19969082],
+            'North_and_South_Forks_Mokelumne_River':[640841.2233035656,4219130.996234625],
             'South_Delta':[642592.4377057501,4189918.7990992256],
             'Cache_Slough_Complex':[615123.5756282026,4262158.33897849],
             'Confluence':[606111.7244591176,4214227.897524303],
-            'Suisun_Bay':[588707.6453680942,4209584.007177471],
+            'Suisun_Bay':[587330.4530226303,4207893.7344756285],
             'Carquinez_Strait':[571227.4604096551,4209182.676400363], 
-            'Suisun_Marsh':[586210.4760883171,4225235.907484644],
+            'Suisun_Marsh':[585992.6837656068,4231349.288782105],
             'San_Pablo_Bay':[553942.9282736651,4208647.568697553],
             'Petaluma':[540030.1280006216,4221490.153564978],
             'South_SF_Bay':[566963.8823753597,4165482.214004264],
-            'Central_SF_Bay':[550375.5435882693,4192415.9683790025], 
+            'Central_SF_Bay':[549337.8061231661,4188897.4110258943], 
             'Lower_South_SF_Bay':[586049.3904422284,4145683.2290003207], 
-            'Napa_Sonoma':[556261.7283191724,4226662.861358802]}
+            'Napa_Sonoma':[555580.7293226086,4232151.950336318]}
 
         self.max_ab = {2012:20000000,
                   2013:50000000,
@@ -100,6 +96,19 @@ class LongfinMaps(object):
             self.runtype = raw_input('Run type of {0} not support. Please enter a supported run type listed here: {1}'.format(self.runtype, ', '.join(accepted_runtypes.keys())))
         self.runtype = self.runtype.lower()
         self.density_units = accepted_runtypes[self.runtype]
+        
+    def check_multisurveys(self):
+        try: self.multisurveys
+        except AttributeError: 
+            print 'Multisurveys not defined. Please define survey numbers for each data source before Multicohort function is called.'
+            print 'Even if both data sources use the same survey numbers, make sure there is data for each.'
+            print 'The data structure is as follows: [[2,3,4,5],[2,3,4,5]]'
+            print 'Example of defining the variables:'
+            print 'cbm = LongfinMaps(run_dir, grd_file, year) #call the class, named cbm'
+            print 'cbm.multisurveys = [[3,4,5,6], [2,3,4,5,6,7]] #define the surveys for the class'
+            print 'cbm.make_MultiCohort_Plot(obs_data1, obs_data2, figname, size_range, static_volumes) #then call the multicohort plot function.'
+            print 'Script is now exiting...'
+            sys.exit(0)
 
     def findNoData(self, Surveys):
         regions = self.poly_names
@@ -197,7 +206,10 @@ class LongfinMaps(object):
             for surv_idx, surv in enumerate(Surveys): #go through prescribed surveys
                 in_surv_idx = [r for r in in_reg_idx if self.obs_df['Survey'][r] == surv] #get each index in prev list where survey is current survey
                 for idx in in_surv_idx:
-                    cur_date = dt.strptime(self.obs_df['SampleDate'][idx], '%m/%d/%Y 0:00')
+                    try:
+                        cur_date = dt.strptime(self.obs_df['SampleDate'][idx], '%m/%d/%Y 0:00') #SLS format
+                    except ValueError:
+                        cur_date = dt.strptime(self.obs_df['SampleDate'][idx], '%Y-%m-%d 00:00:00') #20mm format
                     if isinstance(coh_dates[reg_idx][surv_idx], int):
                         coh_dates[reg_idx][surv_idx] = [cur_date]
                     else:
@@ -209,7 +221,7 @@ class LongfinMaps(object):
                         coh_sizes[reg_idx][surv_idx] = size_range[:]
                     else:
                         last_date = coh_dates[reg_idx][surv_idx -1][1]
-                        if last_date != np.nan:
+                        if not isinstance(last_date, float):
                             time_elapsed = coh_dates[reg_idx][surv_idx][0] - last_date
                             growth = time_elapsed.days * 0.14
                             growth_round = int(math.ceil(growth))
@@ -239,7 +251,7 @@ class LongfinMaps(object):
                     coh_count[reg_idx][surv_idx] += fish_counts
                     coh_vol[reg_idx][surv_idx] += cur_vol   
                      
-        with open('Cohort_data_{0}_output_{1}.csv'.format(self.runtype.upper(), year), 'wb') as outtext:    
+        with open('Cohort_data_output_{0}.csv'.format(year), 'wb') as outtext:    
             outtext.write('region,survey,Date_Start,Date_End,year,size min,size max,fish count,volume per Survey,Density in {0} fish per m3,Region Volume,Reg Abundance\n'.format(self.density_units))
             for reg_idx, region in enumerate(self.poly_names):
                 vol_file_idx = np.where(self.obs_static_vol['region_name'].values == region.replace('_',' '))[0][0]
@@ -255,6 +267,174 @@ class LongfinMaps(object):
                     outtext.write(outline)
 
         return coh_abundance
+    
+    
+    def get_dates_and_sizes(self, obs_file, year, Surveys, size_range):
+        
+        coh_dates = np.zeros((len(self.poly_names),len(Surveys)),dtype=object)
+        coh_sizes = np.zeros((len(self.poly_names),len(Surveys)),dtype=object)
+        
+        orig_size_range = size_range[:]
+        #deal with dates and sizes first
+        for reg_idx, region in enumerate(self.poly_names):
+            in_reg_idx = [r for r, date in enumerate(obs_file['Year'].values) if date == year and obs_file['lfs_region'][r] == region and obs_file['Survey'][r] in Surveys]
+            size_range = orig_size_range[:]
+            for surv_idx, surv in enumerate(Surveys): #go through prescribed surveys
+                in_surv_idx = [r for r in in_reg_idx if obs_file['Survey'][r] == surv] #get each index in prev list where survey is current survey
+                for idx in in_surv_idx:
+                    try:
+                        cur_date = dt.strptime(obs_file['SampleDate'][idx], '%m/%d/%Y 0:00') #SLS format
+                    except ValueError:
+                        cur_date = dt.strptime(obs_file['SampleDate'][idx], '%Y-%m-%d 00:00:00') #20mm format
+                    if isinstance(coh_dates[reg_idx][surv_idx], int):
+                        coh_dates[reg_idx][surv_idx] = [cur_date]
+                    else:
+                        coh_dates[reg_idx][surv_idx] = np.append(coh_dates[reg_idx][surv_idx], cur_date)
+                
+                if len(in_surv_idx) > 0:
+                    coh_dates[reg_idx][surv_idx] = (min(coh_dates[reg_idx][surv_idx]), max(coh_dates[reg_idx][surv_idx]))
+                    if surv_idx == 0:
+                        coh_sizes[reg_idx][surv_idx] = size_range[:]
+                    else:
+                        last_date = coh_dates[reg_idx][surv_idx -1][1]
+                        if not isinstance(last_date, float):
+                            time_elapsed = coh_dates[reg_idx][surv_idx][0] - last_date
+                            growth = time_elapsed.days * 0.14
+                            growth_round = int(math.ceil(growth))
+                            size_range[0] += growth_round
+                            size_range[1] += growth_round
+                            coh_sizes[reg_idx][surv_idx] = size_range[:]
+                        else:
+                            coh_sizes[reg_idx][surv_idx] = size_range[:]
+                else:
+                    coh_sizes[reg_idx][surv_idx] = size_range[:]
+                    coh_dates[reg_idx][surv_idx] = (np.nan, np.nan)
+                
+        return coh_dates, coh_sizes
+        
+        
+    def get_Cohort_start_dates(self, year, Surveys, size_range):    
+        total_surv = 0
+        all_surveys = []
+        for section in Surveys:
+            total_surv += len(section)
+            for surv in section:
+                all_surveys.append(surv)
+                
+        file_sources = [self.obs_df1, self.obs_df2]
+        
+        for obs_idx, obs_file in enumerate(file_sources):
+            dates, sizes = self.get_dates_and_sizes(obs_file, year, Surveys[obs_idx], size_range)
+            if obs_idx == 0:
+                coh_dates = dates
+                coh_sizes = sizes
+            else:
+                coh_dates = np.column_stack((coh_dates, dates))
+                coh_sizes = np.column_stack((coh_sizes, sizes))       
+                
+        return coh_dates, coh_sizes
+                
+        
+    def get_multiCohort_Data(self, year, Surveys, size_range):
+        '''
+        structure = [Region1[[surv1, sizes, dates], [surv2, sizes, dates]], Region2[[surv1, sizes, dates], [surv2, sizes, dates]]]
+        example: The amount of grown in 14 days is 14 days*0.14 mm/day = 1.96 mm
+        '''
+#         valid_idx = [r for r, date in enumerate(self.obs_df['Year'].values) if date == year and self.obs_df['Survey'][r] in Surveys]
+        total_surv = 0
+        all_surveys = []
+        for section in Surveys:
+            total_surv += len(section)
+            for surv in section:
+                all_surveys.append(surv)
+        coh_count = np.zeros((len(self.poly_names),total_surv),np.float64)
+        coh_vol = np.zeros((len(self.poly_names), total_surv),np.float64)
+        coh_density = np.zeros((len(self.poly_names),total_surv),np.float64)
+        coh_abundance = np.zeros((len(self.poly_names),total_surv),np.float64)
+#         coh_dates = np.zeros((len(self.poly_names),total_surv),dtype=object)
+#         coh_sizes = np.zeros((len(self.poly_names),total_surv),dtype=object)
+        
+        file_sources = [self.obs_df1, self.obs_df2]
+        
+        for obs_idx, obs_file in enumerate(file_sources):
+            dates, sizes = self.get_dates_and_sizes(obs_file, year, Surveys[obs_idx], size_range)
+            if obs_idx == 0:
+                coh_dates = dates
+                coh_sizes = sizes
+            else:
+                coh_dates = np.column_stack((coh_dates, dates))
+                coh_sizes = np.column_stack((coh_sizes, sizes))
+        
+        surv_split = len(Surveys[0])
+        for reg_idx, reg in enumerate(coh_dates):
+            if not isinstance(reg[surv_split][0], float) and not isinstance(reg[surv_split-1][1], float):
+                time_elapsed = reg[surv_split][0] - reg[surv_split-1][1]
+                growth = time_elapsed.days * 0.14
+                growth_round = int(math.ceil(growth))
+                size_Range_offset = coh_sizes[reg_idx][surv_split-1][0] - coh_sizes[reg_idx][surv_split][0]
+                total_shift = growth_round + size_Range_offset
+                for surv_idx, size_range in enumerate(coh_sizes[reg_idx]):
+                    if surv_idx >= surv_split:
+                        size_range[0] += total_shift
+                        size_range[1] += total_shift
+                        coh_sizes[reg_idx][surv_idx] = size_range[:]
+
+        
+    
+        for reg_idx, region in enumerate(self.poly_names): #go by each region
+            #find index where the year, region, and listed surveys
+            for surv_idx, surv in enumerate(all_surveys):
+                if surv_idx < surv_split:
+                    self.obs_df = file_sources[0]
+                else:
+                    self.obs_df = file_sources[1]
+            
+                in_idx = [r for r, date in enumerate(self.obs_df['Year'].values) if date == year and self.obs_df['lfs_region'][r] == region and self.obs_df['Survey'][r] == surv]
+                for idx in in_idx:
+                    cur_vol = self.obs_df['Volume'].values[idx]
+                    if isinstance(coh_sizes[reg_idx][surv_idx], str):
+                        fish_counts = self.countAllFishSizes(idx)
+                    else:
+                        fish_counts = self.countSomeFishSizes(idx, coh_sizes[reg_idx][surv_idx])    
+                         
+                    coh_count[reg_idx][surv_idx] += fish_counts
+                    coh_vol[reg_idx][surv_idx] += cur_vol   
+                     
+        with open('Cohort_data_output_{0}.csv'.format(year), 'wb') as outtext:    
+            outtext.write('region,survey,Date_Start,Date_End,year,size min,size max,fish count,volume per Survey,Density in {0} fish per m3,Region Volume,Reg Abundance\n'.format(self.density_units))
+            for reg_idx, region in enumerate(self.poly_names):
+                vol_file_idx = np.where(self.obs_static_vol['region_name'].values == region.replace('_',' '))[0][0]
+                region_vol = self.obs_static_vol['vol_top_999_m'][vol_file_idx]
+                for surv_idx, surv_count in enumerate(coh_count[reg_idx]):
+                    coh_density[reg_idx][surv_idx] = surv_count / coh_vol[reg_idx][surv_idx] 
+                    coh_abundance[reg_idx][surv_idx] = coh_density[reg_idx][surv_idx] * region_vol
+                    coh_abundance = np.nan_to_num(coh_abundance)
+                    try:
+                        outline = ','.join([str(r) for r in [region, surv_idx+1,coh_dates[reg_idx][surv_idx][0].strftime('%m/%d'),coh_dates[reg_idx][surv_idx][1].strftime('%m/%d'), year, coh_sizes[reg_idx][surv_idx][0], coh_sizes[reg_idx][surv_idx][1], surv_count, coh_vol[reg_idx][surv_idx], coh_density[reg_idx][surv_idx] * self.density_units, region_vol, coh_abundance[reg_idx][surv_idx], '\n']])
+                    except AttributeError:
+                        outline = ','.join([str(r) for r in [region, surv_idx+1,'nan','nan', year, coh_sizes[reg_idx][surv_idx][0],coh_sizes[reg_idx][surv_idx][1], surv_count, coh_vol[reg_idx][surv_idx], coh_density[reg_idx][surv_idx] * self.density_units, region_vol, coh_abundance[reg_idx][surv_idx], '\n']])
+                    outtext.write(outline)
+
+        return coh_abundance
+    
+    def get_Predicted_data(self, coh_surv_dates):
+        pred_abun = np.empty_like(coh_surv_dates)
+        
+        for reg_idx, region in enumerate(self.poly_names):
+            for surv_idx, surv in enumerate(pred_abun[reg_idx]):
+                start_date = coh_surv_dates[reg_idx][surv_idx][0]
+                if not isinstance(start_date, float):
+                    start_date_str = dt.strftime(start_date, '%Y-%m-%d')
+                    in_idx = [r for r, date in enumerate(self.pred_data.ix[:,1].values) if date.strip() == start_date_str and self.pred_data.ix[:,2].values[r] == reg_idx]
+                    print in_idx, start_date_str
+                    if len(in_idx) == 0:
+                        pred_abun[reg_idx][surv_idx] = 0
+                    else:
+                        pred_abun[reg_idx][surv_idx] = self.pred_data.ix[:,3].values[in_idx][0]
+                        print pred_abun[reg_idx][surv_idx]
+                else:
+                    pred_abun[reg_idx][surv_idx] = 0
+        return pred_abun
     
     def countAllFishSizes(self, index):
         '''add fish at each mm size to one total
@@ -290,6 +470,7 @@ class LongfinMaps(object):
             max_med = max(meds)
             len_max = (len(str(max_med).split('.')[0]) - 2) * -1
             scaler = round(max_med, len_max)
+            self.plottype = 'BoxWhisker'
             
         elif plotType == 'Bar':
             maxes = []
@@ -298,7 +479,18 @@ class LongfinMaps(object):
             largest_max = max(maxes)
             len_max = (len(str(largest_max).split('.')[0]) - 2) * -1
             scaler = round(largest_max, len_max)
-
+            self.plottype = 'Bar'
+            
+        elif plotType == 'Log':
+            maxes = []
+            for region in data:
+                maxes.append(max(region))
+            largest_max = max(maxes)
+            len_max = (len(str(largest_max).split('.')[0]) - 2) * -1
+            if str(largest_max).split('.')[0][:len_max] != 10:
+                num_zero = (len_max * -1) + 1
+            scaler = int('10' + '0'*num_zero)
+            self.plottype = 'Log'
             
         return scaler
     
@@ -381,7 +573,6 @@ class LongfinMaps(object):
         '''
 
         region_stats = np.zeros((len(self.poly_names), len(surveys)),dtype=object)
-        stats = []
 
         for region in self.poly_names:
 #             print region
@@ -411,6 +602,15 @@ class LongfinMaps(object):
                 for s, surv in enumerate(stats[i]):
                     g.write('{0},{1},{2},{3},{4},{5},{6}\n'.format(reg, s+1, surv['whislo'], surv['q1'], surv['med'], surv['q3'], surv['whishi']))
     
+    def offset_plots(self, barxy, barboxsize):
+        adjust = barboxsize[1] / 2 + 100
+        adj_barxy_up = np.empty_like(barxy)
+        adj_barxy_down = np.empty_like(barxy)
+        for reg_idx, region_xy in enumerate(barxy):
+            adj_barxy_up[reg_idx] = [region_xy[0], region_xy[1] + adjust]
+            adj_barxy_down[reg_idx] = [region_xy[0], region_xy[1] - adjust]
+            
+        return adj_barxy_up, adj_barxy_down
 ### ~~~~~~~~~~~~~~~~ CONTROL FUNCTIONS ~~~~~~~~~~~~~~~~ ###
 
     def make_Obs_Barplot(self, longfile_path, figname, size_range, Surveys,static_volumes_file):
@@ -458,6 +658,7 @@ class LongfinMaps(object):
             barxy = self.findSiteLoc(self.poly_names) #get xy for each site
             labels = self.findNoData(Surveys) #find correct labels for surveys with no data
             leg_args['max'] = self.get_Plot_Scale(obs_data, 'Bar')
+            leg_args['PlotType'] = 'Bar'
             print leg_args['max'], obs_data
             Longfin_Plot_Utils.plot_bars(ax, fig, obs_data, barxy, barboxsize, self.xylims,
                                  leg_args, frac=False, labels=labels)
@@ -477,6 +678,7 @@ class LongfinMaps(object):
         data is precalculated and does NOT come from long file, but is possible
         ylabel can be set to "Abundance" or "Density"
         '''
+        self.check_runtype()
         self.datatype = 'Precalculated' #set this parameter for run specific functions
         self.obs_BW_file = pd.read_csv(data_path, parse_dates=True)
         self.obs_static_vol = pd.read_csv(static_volumes_file, parse_dates=True)
@@ -490,7 +692,7 @@ class LongfinMaps(object):
             
             fig, ax = Longfin_Plot_Utils.draw_water_and_polys(self.grd, self.plot_poly_dict, self.xylims)
             leg_args = {'ylabel':plot_type,
-                        'bars':boxes,
+                        'boxes':boxes,
                         'max':''}
             
 #             if leg_args['ylabel'] == 'Density':
@@ -519,6 +721,7 @@ class LongfinMaps(object):
                 obs_data = self.Abundance_to_Density(obs_data, size_range) #convert abundance data to density
                 
             leg_args['max'] = self.get_Plot_Scale(obs_data, 'BoxWhisker')
+            leg_args['PlotType'] = 'BoxWhisker'
             Longfin_Plot_Utils.plot_boxes(ax, fig, obs_data, barxy, barboxsize, self.xylims,
                                  leg_args, frac=False, labels=labels)
     
@@ -575,6 +778,7 @@ class LongfinMaps(object):
             barxy = self.findSiteLoc(self.poly_names) #get xy for each site
             labels = self.findNoData(Surveys) #find correct labels for surveys with no data
             leg_args['max'] = self.get_Plot_Scale(coh_data, 'Bar')
+            leg_args['PlotType'] = 'Bar'
             Longfin_Plot_Utils.plot_bars(ax, fig, coh_data, barxy, barboxsize, self.xylims,
                                  leg_args, frac=False, labels=labels)
             new_figname = '_'.join([figname, self.runtype.upper(), str(self.year), str(leg_args['ylabel']), '{0}mm-{1}mm.png'.format(size_range[0], size_range[1])])
@@ -585,23 +789,24 @@ class LongfinMaps(object):
 
         return
     
-    def make_MultiCohort_Plot(self, longfile_path1, longfile_path2, figname, size_range, Surveys,static_volumes_file):
+    def make_MultiCohort_Bar_Plot(self, longfile_path1, longfile_path2, figname, size_range, static_volumes_file):
         '''UNDER CONSTRUCTION
         Create a plot for cohort growth. cohort growth shows a gradual increase of .14 * days between surveys
         this growth is added to the size range, progressively growing as time goes on.
         includes 2 data sources
         '''
         self.check_runtype()
+        self.check_multisurveys()
         self.datatype = 'Observed' #set this parameter for run specific functions
         self.obs_df1 = pd.read_csv(longfile_path1, parse_dates=True)
         self.obs_df2 = pd.read_csv(longfile_path2, parse_dates=True)
         self.obs_static_vol = pd.read_csv(static_volumes_file, parse_dates=True)
         
         bars = []
-        for num in Surveys:
-            bars.append(self.runtype1, '{0}'.format(num))
-        for num in Surveys:
-            bars.append(self.runtype2, '{0}'.format(num))
+        for num in self.multisurveys[0]:
+            bars.append('{0} {1}'.format(os.path.basename(longfile_path1).split('_')[0], num))
+        for num in self.multisurveys[1]:
+            bars.append('{0} {1}'.format(os.path.basename(longfile_path2).split('_')[0], num))
         barboxsize = [10000.,10000.] #determines size of plots. Don't touch.
 #         plot_types = ['Density', 'Abundance']
         plot_types = ['Abundance'] #Just abundance atm...
@@ -619,28 +824,186 @@ class LongfinMaps(object):
             if leg_args['ylabel'] == 'Density':
                 plt.title('{0} Estimated Fish per {1} cubic meter {2}'.format(self.runtype.upper(), int(self.density_units), self.year))
             elif leg_args['ylabel'] == 'Abundance':
-                plt.title('Longfin Smelt Survey {0} {1}mm to {2}mm {3} Cohort {4} {5} '.format(Surveys[0], size_range[0], size_range[1], self.runtype.upper(), plot_type, self.year))
+                plt.title('Longfin Smelt {0}mm to {1}mm Cohort {2} {3} '.format(size_range[0], size_range[1], plot_type, self.year))
                 
             
-#             plt.title('Observed {0} {1}'.format(leg_args['ylabel'], self.year))
             
             
             # read observed counts
-            self.obs_df =  self.obs_df1 #set this just for temp reasons
-            coh_data1 = self.get_Cohort_Data(self.year, Surveys, size_range)
-            self.obs_df =  self.obs_df2 #set this just for temp reasons
-            coh_data2 = self.get_Cohort_Data(self.year, Surveys, size_range)
-#             coh_data = np.append(coh_data1, coh_data2) #combine the data
+#             self.obs_df =  self.obs_df1 #set this just for temp reasons
+            coh_data = self.get_multiCohort_Data(self.year, self.multisurveys, size_range)
             
             if leg_args['ylabel'] == 'Density':
-                coh_data1 = self.Abundance_to_Density(coh_data1, size_range) #convert abundance data to density
-                coh_data2 = self.Abundance_to_Density(coh_data2, size_range) #convert abundance data to density
+                coh_data = self.Abundance_to_Density(coh_data, size_range) #convert abundance data to density
             
             barxy = self.findSiteLoc(self.poly_names) #get xy for each site
-            labels = self.findNoData(Surveys) #find correct labels for surveys with no data
+            
+            self.obs_df =  self.obs_df1
+            labels1 = self.findNoData(self.multisurveys[0]) #find correct labels for surveys with no data
+            self.obs_df =  self.obs_df2 #set this just for temp reasons
+            labels2 = self.findNoData(self.multisurveys[1])
+            labels = np.column_stack((labels1, labels2))
+            
+#             leg_args['max'] = self.get_Plot_Scale(coh_data, 'Log')
             leg_args['max'] = self.get_Plot_Scale(coh_data, 'Bar')
+            leg_args['PlotType'] = 'Log'
             Longfin_Plot_Utils.plot_bars(ax, fig, coh_data, barxy, barboxsize, self.xylims,
                                  leg_args, frac=False, labels=labels)
+            new_figname = '_'.join([figname, self.runtype.upper(), str(self.year), str(leg_args['ylabel']), '{0}mm-{1}mm.png'.format(size_range[0], size_range[1])])
+            plt.savefig(new_figname, dpi=900, facecolor='white',bbox_inches='tight')
+    
+            plt.close()
+            plt.clf()
+
+        return
+    
+    def make_MultiCohort_BoxWhisker_Plot(self, longfile_path1, longfile_path2, figname, size_range, static_volumes_file):
+        '''UNDER CONSTRUCTION
+        Create a plot for cohort growth. cohort growth shows a gradual increase of .14 * days between surveys
+        this growth is added to the size range, progressively growing as time goes on.
+        includes 2 data sources
+        '''
+        self.check_runtype()
+        self.check_multisurveys()
+        self.datatype = 'Precalculated' #set this parameter for run specific functions
+        self.obs_BW_file1 = pd.read_csv(longfile_path1, parse_dates=True)
+        self.obs_BW_file2 = pd.read_csv(longfile_path2, parse_dates=True)
+        self.obs_static_vol = pd.read_csv(static_volumes_file, parse_dates=True)
+        
+        boxes = []
+        for num in self.multisurveys[0]:
+            boxes.append('{0} {1}'.format(os.path.basename(longfile_path1).split('_')[0], num))
+        for num in self.multisurveys[1]:
+            boxes.append('{0} {1}'.format(os.path.basename(longfile_path2).split('_')[0], num))
+        barboxsize = [10000.,10000.] #determines size of plots. Don't touch.
+#         plot_types = ['Density', 'Abundance']
+        plot_types = ['Abundance'] #Just abundance atm...
+        for plot_type in plot_types:
+            
+            fig, ax = Longfin_Plot_Utils.draw_water_and_polys(self.grd, self.plot_poly_dict, self.xylims)
+            leg_args = {'ylabel':plot_type,
+                        'boxes':boxes,
+                        'max':''}
+            
+#             if leg_args['ylabel'] == 'Density':
+#                 leg_args['max'] = self.max_den[self.year]
+#             elif leg_args['ylabel'] == 'Abundance':
+#                 leg_args['max'] = self.max_ab[self.year]
+            if leg_args['ylabel'] == 'Density':
+                plt.title('{0} Estimated Fish per {1} cubic meter {2}'.format(self.runtype.upper(), int(self.density_units), self.year))
+            elif leg_args['ylabel'] == 'Abundance':
+                plt.title('Longfin Smelt {0}mm to {1}mm Cohort {2} {3} '.format(size_range[0], size_range[1], plot_type, self.year))
+                
+            
+            
+            
+            # read observed counts
+#             self.obs_df =  self.obs_df1 #set this just for temp reasons
+#             coh_data = self.get_multiCohort_Data(self.year, self.multisurveys, size_range)
+            self.obs_BW_file = self.obs_BW_file1
+            coh_data1 = self.get_precalc_BW_data(self.multisurveys[0])
+            self.obs_BW_file = self.obs_BW_file2
+            coh_data2 = self.get_precalc_BW_data(self.multisurveys[1])
+            coh_data = np.column_stack((coh_data1, coh_data2))
+            
+            if leg_args['ylabel'] == 'Density':
+                coh_data = self.Abundance_to_Density(coh_data, size_range) #convert abundance data to density
+            
+            barxy = self.findSiteLoc(self.poly_names) #get xy for each site
+            
+            self.obs_BW_file = self.obs_BW_file1
+            labels1 = self.findNoData(self.multisurveys[0]) #find correct labels for surveys with no data
+            self.obs_BW_file = self.obs_BW_file2 #set this just for temp reasons
+            labels2 = self.findNoData(self.multisurveys[1])
+            labels = np.column_stack((labels1, labels2))
+            
+#             leg_args['max'] = self.get_Plot_Scale(coh_data, 'Log')
+            leg_args['max'] = self.get_Plot_Scale(coh_data, 'BoxWhisker')
+            leg_args['PlotType'] = 'Log'
+            Longfin_Plot_Utils.plot_boxes(ax, fig, coh_data, barxy, barboxsize, self.xylims,
+                                 leg_args, frac=False, labels=labels)
+            new_figname = '_'.join([figname, self.runtype.upper(), str(self.year), str(leg_args['ylabel']), '{0}mm-{1}mm.png'.format(size_range[0], size_range[1])])
+            plt.savefig(new_figname, dpi=900, facecolor='white',bbox_inches='tight')
+    
+            plt.close()
+            plt.clf()
+
+        return
+    
+    def make_PredvsObs_MultiCohort_Plot(self, longfile_path1, longfile_path2, pred_file, figname, size_range,static_volumes_file):
+        '''UNDER CONSTRUCTION
+        Create a plot for cohort growth. cohort growth shows a gradual increase of .14 * days between surveys
+        this growth is added to the size range, progressively growing as time goes on.
+        includes 2 data sources
+        '''
+        self.check_runtype()
+        self.check_multisurveys()
+        self.datatype = 'Observed' #set this parameter for run specific functions
+        self.obs_df1 = pd.read_csv(longfile_path1, parse_dates=True)
+        self.obs_df2 = pd.read_csv(longfile_path2, parse_dates=True)
+        self.pred_data = pd.read_csv(pred_file, parse_dates=True)
+        self.obs_static_vol = pd.read_csv(static_volumes_file, parse_dates=True)
+        
+        bars = []
+        for num in self.multisurveys[0]:
+            bars.append('{0} {1}'.format(os.path.basename(longfile_path1).split('_')[0], num))
+        for num in self.multisurveys[1]:
+            bars.append('{0} {1}'.format(os.path.basename(longfile_path2).split('_')[0], num)) ##set these to dates?
+        barboxsize = [10000.,10000.] #determines size of plots. Don't touch.
+#         plot_types = ['Density', 'Abundance']
+        plot_types = ['Abundance'] #Just abundance atm...
+        for plot_type in plot_types:
+            
+            fig, ax = Longfin_Plot_Utils.draw_water_and_polys(self.grd, self.plot_poly_dict, self.xylims)
+            leg_args = {'ylabel':plot_type,
+                        'bars':bars,
+                        'max':''}
+            
+#             if leg_args['ylabel'] == 'Density':
+#                 leg_args['max'] = self.max_den[self.year]
+#             elif leg_args['ylabel'] == 'Abundance':
+#                 leg_args['max'] = self.max_ab[self.year]
+            if leg_args['ylabel'] == 'Density':
+                plt.title('{0} Estimated Fish per {1} cubic meter {2}'.format(self.runtype.upper(), int(self.density_units), self.year))
+            elif leg_args['ylabel'] == 'Abundance':
+                plt.title('Longfin Smelt {0}mm to {1}mm Cohort {2} {3} '.format(size_range[0], size_range[1], plot_type, self.year))
+                
+            
+            
+            
+            # read observed counts
+#             self.obs_df =  self.obs_df1 #set this just for temp reasons
+            coh_data = self.get_multiCohort_Data(self.year, self.multisurveys, size_range)
+            coh_surv_dates, coh_surv_sizes = self.get_Cohort_start_dates(self.year, self.multisurveys, size_range)
+            
+            pred_data = self.get_Predicted_data(coh_surv_dates)
+            if leg_args['ylabel'] == 'Density':
+                coh_data = self.Abundance_to_Density(coh_data, size_range) #convert abundance data to density
+            
+            barxy = self.findSiteLoc(self.poly_names) #get xy for each site
+            barxy_up, barxy_down = self.offset_plots(barxy, barboxsize)
+            
+            self.obs_df =  self.obs_df1
+            labels1 = self.findNoData(self.multisurveys[0]) #find correct labels for surveys with no data
+            self.obs_df =  self.obs_df2 #set this just for temp reasons
+            labels2 = self.findNoData(self.multisurveys[1])
+            coh_labels = np.column_stack((labels1, labels2))
+            self.obs_df = self.pred_data
+            pred_labels = np.empty_like(pred_data)
+            pred_labels[:] = ''
+            
+            
+            
+#             leg_args['max'] = self.get_Plot_Scale(coh_data, 'Log')
+            leg_args['max'] = self.get_Plot_Scale(coh_data, 'Bar')
+            leg_args['obspred_label'] = 'Obs'
+            leg_args['PlotType'] = 'Bar'
+            
+            Longfin_Plot_Utils.plot_bars(ax, fig, coh_data, barxy_down, barboxsize, self.xylims,
+                                 leg_args, frac=False, labels=coh_labels)
+            leg_args['obspred_label'] = 'Pred'
+            Longfin_Plot_Utils.plot_bars(ax, fig, pred_data, barxy_up, barboxsize, self.xylims,
+                                 leg_args, frac=False, labels=pred_labels)
             new_figname = '_'.join([figname, self.runtype.upper(), str(self.year), str(leg_args['ylabel']), '{0}mm-{1}mm.png'.format(size_range[0], size_range[1])])
             plt.savefig(new_figname, dpi=900, facecolor='white',bbox_inches='tight')
     
@@ -694,19 +1057,23 @@ if __name__ == '__main__':
     obs_bar = False
     obs_boxwhisker = False
     cohort = False
-    multicohort = True
+    multicohort_bar = False
+    multicohort_boxwhisker = False
+    pred_vs_obs_multicohort = True
 
-    year = 2013 #keep to one year for now, multiyear support coming
-    size_range = [6, 8] #inclusive range for the mm values. so min and max values are included in totals
+    year = 2012 #keep to one year for now, multiyear support coming
+    size_range = [10, 14] #inclusive range for the mm values. so min and max values are included in totals
     surveys = [3,4,5,6]
 
     run_dir = r'J:\Longfin\bar_plots\FISH_PTM'
     grd_file = os.path.join(run_dir, 'ptm.grd')
     cbm = LongfinMaps(run_dir, grd_file, year)
 #     bm_inputs = cbm.get_inputs()
-    fig_dir = '.'
+    fig_dir = 'Multicohort_plots'
+    if not os.path.isdir(fig_dir):
+        os.mkdir(fig_dir)
     
-    runtype = 'SLS' #sls or 20mm supported. Changes in Density calcs and titles
+    runtype = 'sls' #sls or 20mm supported. Changes in Density calcs and titles
     
     if obs_bar:
         figname = os.path.join(fig_dir, 'obs_Bar_Plots')
@@ -715,24 +1082,41 @@ if __name__ == '__main__':
         cbm.runtype = runtype
         cbm.make_Obs_Barplot(obs_data, figname, size_range, surveys, static_volumes)
     if obs_boxwhisker:
-        figname = os.path.join(fig_dir, 'obs_Box_Whisker')
-        obs_data = r"J:\Longfin\bar_plots\SLS_quantiles_12mm-25mm_2012.csv"
+        figname = os.path.join(fig_dir, 'Cohort_Box_Whisker')
+        obs_data = r"J:\Longfin\bar_plots\SLS_Cohort_quantiles_5mm-8mm_2012.csv"
         static_volumes = r"C:\git\longfin_trawl_map\static_volumes_1.25m_NAVD.csv"
         cbm.runtype = runtype
         cbm.make_precalc_BoxWhiskerPlot(obs_data, figname, size_range, surveys, static_volumes)
     if cohort:
         figname = os.path.join(fig_dir, 'Cohort_Plots')
-        obs_data = r"J:\Longfin\bar_plots\SLS_trawl_summary.csv"
+        obs_data = r"J:\Longfin\bar_plots\20mm_trawl_summary.csv"
         static_volumes = r"C:\git\longfin_trawl_map\static_volumes_1.25m_NAVD.csv"
         cbm.runtype = runtype
         cbm.make_Cohort_Plot(obs_data, figname, size_range, surveys, static_volumes)
-    if multicohort:
-        figname = os.path.join(fig_dir, 'MultiCohort_Plots')
+    if multicohort_bar:
+        figname = os.path.join(fig_dir, 'Extended_Cohort_BarPlots')
         obs_data1 = r"J:\Longfin\bar_plots\SLS_trawl_summary.csv"
         obs_data2 = r"J:\Longfin\bar_plots\20mm_trawl_summary.csv"
         static_volumes = r"C:\git\longfin_trawl_map\static_volumes_1.25m_NAVD.csv"
-        cbm.runtype1 = 'SLS'
-        cbm.runtype2 = '20mm'
-        cbm.make_MultiCohort_Plot(obs_data1, obs_data2, figname, size_range, surveys, static_volumes)
+        cbm.multisurveys = [[3,4,5,6], [2,3,4,5,6,7,8,9]]
+        cbm.runtype = 'sls' #set one the density multiplier
+        cbm.make_MultiCohort_Bar_Plot(obs_data1, obs_data2, figname, size_range, static_volumes)
+    if multicohort_boxwhisker:
+        figname = os.path.join(fig_dir, 'Extended_Cohort_BoxPlots')
+        obs_data1 = r"J:\Longfin\bar_plots\SLS_quantiles_3mm-11mm_2012.csv"
+        obs_data2 = r"J:\Longfin\bar_plots\20mm_quantiles_small_larvae_2012.csv"
+        static_volumes = r"C:\git\longfin_trawl_map\static_volumes_1.25m_NAVD.csv"
+        cbm.multisurveys = [[3,4,5,6], [2,3,4,5,6,7,8,9]]
+        cbm.runtype = 'sls' #set one the density multiplier
+        cbm.make_MultiCohort_BoxWhisker_Plot(obs_data1, obs_data2, figname, size_range, static_volumes)
+    if pred_vs_obs_multicohort:
+        figname = os.path.join(fig_dir, 'Pred_Vs_Obs_Extended_Cohort_Plots')
+        obs_data1 = r"J:\Longfin\bar_plots\SLS_trawl_summary.csv"
+        obs_data2 = r"J:\Longfin\bar_plots\20mm_trawl_summary.csv"
+        pred_data = r"J:\Longfin\bar_plots\San_Pablo_passive_abundance.csv"
+        static_volumes = r"C:\git\longfin_trawl_map\static_volumes_1.25m_NAVD.csv"
+        cbm.multisurveys = [[3,4,5,6], [2,3,4,5,6,7,8,9]]
+        cbm.runtype = 'sls' #set one the density multiplier
+        cbm.make_PredvsObs_MultiCohort_Plot(obs_data1, obs_data2, pred_data, figname, size_range, static_volumes)
 
 
