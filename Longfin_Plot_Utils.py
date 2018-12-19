@@ -92,7 +92,9 @@ def plot_boxes(ax, fig, data, xy, boxsize, xylims, leg_args, frac=True,
                 plotBWPlot(fig_coords, data[p,:],fig, plot_range,
                              alt_hatch=alt_hatch)
             fig.canvas.draw()
-    xy_leg = [589782.5317557553,4187778.3682879894] # move to main, Legend coords
+#     xy_leg = [589782.5317557553,4187778.3682879894] # move to main, Legend coords
+    xy_leg = [554742.1172539165,4275228.120412473] # move to main
+
     mod = len(leg_args['boxes']) / 4 # figure out how long to make the legend, every 4 items make more room
     if len(leg_args['boxes']) % 4 != 0:
         mod += 1
@@ -172,9 +174,13 @@ def plotBWPlot(xys, box_vals, fig, y_range, legend=False, alt_hatch=False,
         numBoxes = len(tot_box_vals)
         pos = np.arange(numBoxes) + 1
         if len(tot_labels) > 0:
-            for tick, label in zip(range(numBoxes), tot_labels):
-                ax.text(pos[tick], 0.05, label, ha='center', va='bottom', color='red', fontsize=7)
-                
+            if len(tot_labels) > 10:
+                for tick, label in zip(range(numBoxes), tot_labels):
+                    ax.text(pos[tick], 0.05, label, ha='center', va='bottom', color='red', fontsize=5)
+            else:
+                for tick, label in zip(range(numBoxes), tot_labels):
+                    ax.text(pos[tick], 0.05, label, ha='center', va='bottom', color='red', fontsize=7)
+                    
     else: #legend plot
         ax = fig.add_axes(Bbox(xys))
 #         ind = np.arange(5, (len(tot_box_vals) + 1)* 5, 5)
@@ -250,7 +256,7 @@ def plot_bars(ax, fig, data, xy, boxsize, xylims, leg_args, frac=True,
                 plotBarGraph(fig_coords, data[p,:],fig, plot_range, plotType,
                              alt_hatch=alt_hatch, ylabel=ylabel)
             fig.canvas.draw()
-    xy_leg = [589782.5317557553,4187778.3682879894] # move to main
+    xy_leg = [554742.1172539165,4275228.120412473] # move to main
     mod = len(leg_args['bars']) / 4
     if len(leg_args['bars']) % 4 != 0:
         mod += 1
@@ -354,9 +360,12 @@ def plotBarGraph(xys, bar_vals, fig, y_range, plotType, legend=False, alt_hatch=
             ytick_max = int(y_range[1])
             ax.set_yticks([0,ytick_max])
             ax.set_yticklabels(['0','{0}'.format(ytick_max)])
-        exponent = np.log10(ytick_max)
-        if exponent - int(exponent) == 0.:
-            ax.set_yticklabels(['0','10$^%d$'%(exponent)])
+            exponent = np.log10(ytick_max)
+            if ytick_max == 0:
+                ax.set_yticklabels(['0','0'])
+            else:    
+                if exponent - int(exponent) == 0.:
+                    ax.set_yticklabels(['0','10$^%d$'%(exponent)])
         ax.set_ylim(y_range[0], ytick_max)
         ax.set_ylabel(ylabel)
     else:
@@ -382,7 +391,11 @@ def plotBarGraph(xys, bar_vals, fig, y_range, plotType, legend=False, alt_hatch=
         rects = ax.patches
         for rect, label in zip(rects, tot_labels):
             height = rect.get_height()
-            ax.text(rect.get_x() + rect.get_width() / 2, height, label,
-                    ha='center', va='bottom', color='red', fontsize=7)
+            if len(tot_labels) > 10:
+                ax.text(rect.get_x() + rect.get_width() / 2, height, label,
+                        ha='center', va='bottom', color='red', fontsize=5)
+            else:
+                ax.text(rect.get_x() + rect.get_width() / 2, height, label,
+                        ha='center', va='bottom', color='red', fontsize=7)
         
     

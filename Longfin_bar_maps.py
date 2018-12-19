@@ -549,9 +549,9 @@ class LongfinBarMaps(object):
             bar_idx = Surveys.index(cur_survey)
 
             if isinstance(size_range, str):
-                fish_counts = self.countAllFishDepths(i)
+                fish_counts = self.countAllFishSizes(i)
             else:
-                fish_counts = self.countSomeFishDepths(i, size_range)
+                fish_counts = self.countSomeFishSizes(i, size_range)
             obs_count[poly_idx][bar_idx] += fish_counts
             obs_vol[poly_idx][bar_idx] += cur_vol
             
@@ -571,27 +571,27 @@ class LongfinBarMaps(object):
         
         return reg_abundance
     
-    def countAllFishDepths(self, index):
-        '''add fish at each mm depth to one total
+    def countAllFishSizes(self, index):
+        '''add fish at each mm size to one total
         '''
-        depth_readings = [r for r in self.obs_df.keys() if 'mm' in r]
+        size_readings = [r for r in self.obs_df.keys() if 'mm' in r]
         total = 0
-        for depth in depth_readings:
-            total += self.obs_df[depth][index]
+        for size in size_readings:
+            total += self.obs_df[size][index]
         return total
     
-    def countSomeFishDepths(self, index, size_range):
-        '''add fish at specified mm depth to one total
+    def countSomeFishSizes(self, index, size_range):
+        '''add fish at specified mm sizes to one total
         '''
         total = 0
         min = size_range[0]
         max = size_range[1]
-        for depth in range(min, max+1):
-            key = str(depth) + 'mm'
+        for size in range(min, max+1):
+            key = str(size) + 'mm'
             if key in self.obs_df.columns.values:
                 total += self.obs_df[key][index]
             else:
-                print 'Invalid depth of', key
+                print 'Invalid Size of', key
                 continue
         return total
     
@@ -691,7 +691,7 @@ class LongfinBarMaps(object):
         
         for reg_idx ,reg in enumerate(self.poly_names):
 #             print reg
-            valid_idx = [r for r, date in enumerate(self.obs_df['Year'].values) if date in years and self.obs_df['lfs_region'].values[r] == reg]
+            valid_idx = [r for r, date in enumerate(self.obs_df['Year'].values) if date == year and self.obs_df['lfs_region'].values[r] == reg]
 #             valid_idx = [r for r, obsreg in enumerate(self.obs_df['lfs_region'].values) if obsreg == reg ]
             yearly_surveys= list(set(self.obs_df['Survey'].values[valid_idx]))
             
@@ -703,9 +703,9 @@ class LongfinBarMaps(object):
             region_vol = self.obs_static_vol['vol_top_999_m'][vol_file_idx]
             for i, v_idx in enumerate(valid_idx):
                 if isinstance(size_range, str):
-                    fish_counts = self.countAllFishDepths(v_idx)
+                    fish_counts = self.countAllFishSizes(v_idx)
                 else:
-                    fish_counts = self.countSomeFishDepths(v_idx, size_range)
+                    fish_counts = self.countSomeFishSizes(v_idx, size_range)
                 cur_survey = self.obs_df['Survey'].values[v_idx]
                 survey_idx = yearly_surveys.index(cur_survey)
                 obs_count[reg_idx][survey_idx] += fish_counts
@@ -777,25 +777,6 @@ class LongfinBarMaps(object):
         
    
             
-    def countEachFishDepths(self, index, size_bins):
-        '''return fish depth at each mm depth
-        '''
-        depth_readings = [r for r in self.obs_df.keys() if 'mm' in r]
-        sizes = np.zeros(len(size_bins) + 1)
-        for depth in depth_readings:
-            depnum = int(depth.split('mm')[0])
-            last_idx = 0
-            for bin in size_bins:
-                if depnum >= size_bins[-1]: #just check if its bigger than the biggest bin...
-                    last_idx = len(sizes)
-                    break
-                elif depnum < bin:
-                    break
-                else:
-                    last_idx += 1
-            sizes[last_idx] += self.obs_df[depth][index]
-        
-        #TODO this
     
     def get_obs_from_fit(self, year):
         dformat = '%Y-%m-%d'

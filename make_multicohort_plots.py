@@ -7,8 +7,8 @@ Created on Nov 29, 2018
 from Longfin_Plotter import LongfinMaps
 import os
 
-bar = True
-BW = False
+bar = False
+BW = True
 
 years = [2012,2013,2016,2017]
 sizes = [[3,11], [12,25]]

@@ -9,9 +9,9 @@ from Longfin_Plotter import LongfinMaps
 import os
 
 Bar = True    #Make bar plots?
-BW = False    # Make Box Whisker plots?
+BW = True    # Make Box Whisker plots?
 
-years = [2012, 2013, 2016, 2017]
+years = [2012,2017]
 sizes = [[3,11], [12,25]]
 surveys = [1,2,3,4,5,6]
 BW_paths = [r"J:\Longfin\bar_plots\SLS_quantiles_3mm-11mm_YEAR.csv",
@@ -21,9 +21,12 @@ static_volumes = r"C:\git\longfin_trawl_map\static_volumes_1.25m_NAVD.csv"
 
 run_dir = r'J:\Longfin\bar_plots\FISH_PTM'
 grd_file = os.path.join(run_dir, 'ptm.grd')
-fig_dir = '.'
+fig_dir = 'SLS_Plots'
 
 runtype = 'SLS'
+
+if not os.path.isdir(fig_dir):
+    os.mkdir(fig_dir)
 
 for year in years:
     for i, size_range in enumerate(sizes):

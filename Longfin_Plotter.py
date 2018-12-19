@@ -115,8 +115,20 @@ class LongfinMaps(object):
             print 'cbm.make_MultiCohort_Plot(obs_data1, obs_data2, figname, size_range, static_volumes) #then call the multicohort plot function.'
             print 'Script is now exiting...'
             sys.exit(0)
+            
+    def filter_by_startDate(self, in_idx, start_Date):
 
-    def findNoData(self, Surveys):
+        for i, idx in enumerate(in_idx):
+            try:
+                surv_Date = dt.strptime(self.obs_df['SampleDate'].values[idx], '%m/%d/%Y %H:%M')
+            except ValueError:
+                surv_Date = dt.strptime(self.obs_df['SampleDate'].values[idx], '%Y-%m-%d %H:%M:%S')
+            if surv_Date < start_Date:
+                print 'deleted {0} at {1}'.format(idx, self.obs_df['SampleDate'].values[idx])
+                del in_idx[i]
+        return in_idx
+    
+    def findNoData(self, Surveys, obs_data):
         '''
         Finds area in data files that have no data and creates a labels array for plotting
         areas with no data are assigned an 'X' to show a non zero no data value
@@ -126,24 +138,26 @@ class LongfinMaps(object):
         labels = np.chararray((len(regions), len(Surveys)))
         labels[:] = 'X'
         
+        
         if self.datatype == 'Precalculated':
-            valid_idx = [r for r, survey in enumerate(self.obs_BW_file['survey'].values) if survey in Surveys]
+            valid_idx = [r for r, survey in enumerate(obs_data['survey'].values) if survey in Surveys]
             for idx in valid_idx:
-                if not np.isnan(self.obs_BW_file['q5'].values[idx]):
-                    cur_region = self.obs_BW_file['region'][idx].replace(' ', '_')
+                if not np.isnan(obs_data['q5'].values[idx]):
+                    cur_region = obs_data['region'][idx].replace(' ', '_')
                     reg_idx = regions.index(cur_region)
-                    cur_surv = self.obs_BW_file['survey'][idx]
+                    cur_surv = obs_data['survey'][idx]
                     surv_idx = Surveys.index(cur_surv)
                     labels[reg_idx][surv_idx] = ''
                     
         elif self.datatype == 'Observed':
-            valid_idx = [r for r, date in enumerate(self.obs_df['Year'].values) if date == self.year and self.obs_df['Survey'][r] in Surveys]
+            valid_idx = [r for r, date in enumerate(obs_data['Year'].values) if date == self.year and obs_data['Survey'][r] in Surveys]
             for idx in valid_idx:
-                cur_region = self.obs_df['lfs_region'][idx]
+                cur_region = obs_data['lfs_region'][idx]
                 reg_idx = regions.index(cur_region)
-                cur_surv = self.obs_df['Survey'][idx]
+                cur_surv = obs_data['Survey'][idx]
                 bar_idx = Surveys.index(cur_surv)
                 labels[reg_idx][bar_idx] = ''
+        
         
         else:
             print 'Undefined type for getting missing data labels.'
@@ -173,9 +187,9 @@ class LongfinMaps(object):
             bar_idx = Surveys.index(cur_survey)
 
             if isinstance(size_range, str):
-                fish_counts = self.countAllFishSizes(i)
+                fish_counts = self.countAllFishSizes(i, self.obs_df)
             else:
-                fish_counts = self.countSomeFishSizes(i, size_range)
+                fish_counts = self.countSomeFishSizes(i, size_range, self.obs_df)
             obs_count[poly_idx][bar_idx] += fish_counts
             obs_vol[poly_idx][bar_idx] += cur_vol
             
@@ -202,7 +216,7 @@ class LongfinMaps(object):
         
         '''
         #set growth rate for multiple functions. Has changed from .14 to .2 at times
-        Growth_Rate = .2
+        Growth_Rate = self.growth_rate
 #         valid_idx = [r for r, date in enumerate(self.obs_df['Year'].values) if date == year and self.obs_df['Survey'][r] in Surveys]
         
         coh_count = np.zeros((len(self.poly_names),len(Surveys)),np.float64)
@@ -259,9 +273,9 @@ class LongfinMaps(object):
                 for idx in in_surv_idx:
                     cur_vol = self.obs_df['Volume'].values[idx]
                     if isinstance(coh_sizes[reg_idx][surv_idx], str):
-                        fish_counts = self.countAllFishSizes(idx)
+                        fish_counts = self.countAllFishSizes(idx, self.obs_df)
                     else:
-                        fish_counts = self.countSomeFishSizes(idx, coh_sizes[reg_idx][surv_idx])    
+                        fish_counts = self.countSomeFishSizes(idx, coh_sizes[reg_idx][surv_idx], self.obs_df)    
                          
                     coh_count[reg_idx][surv_idx] += fish_counts
                     coh_vol[reg_idx][surv_idx] += cur_vol   
@@ -284,7 +298,7 @@ class LongfinMaps(object):
         return coh_abundance
     
     
-    def get_dates_and_sizes(self, obs_file, year, Surveys, size_range):
+    def get_dates_and_sizes(self, obs_file, year, Surveys, size_range, growthRate):
         
         coh_dates = np.zeros((len(self.poly_names),len(Surveys)),dtype=object)
         coh_sizes = np.zeros((len(self.poly_names),len(Surveys)),dtype=object)
@@ -315,13 +329,73 @@ class LongfinMaps(object):
                         last_date = coh_dates[reg_idx][surv_idx -1][1]
                         if not isinstance(last_date, float):
                             time_elapsed = coh_dates[reg_idx][surv_idx][0] - last_date
-                            growth = time_elapsed.days * 0.14
+                            growth = time_elapsed.days * growthRate
                             growth_round = int(math.ceil(growth))
                             size_range[0] += growth_round
                             size_range[1] += growth_round
                             coh_sizes[reg_idx][surv_idx] = size_range[:]
                         else:
                             coh_sizes[reg_idx][surv_idx] = size_range[:]
+                else:
+                    coh_sizes[reg_idx][surv_idx] = size_range[:]
+                    coh_dates[reg_idx][surv_idx] = (np.nan, np.nan)
+                
+        return coh_dates, coh_sizes
+    
+    def get_chron_dates_and_sizes(self, run_DF, year, size_range, growthRate):
+
+        
+        coh_dates = np.zeros((len(self.poly_names),len(run_DF[2])),dtype=object)
+        coh_sizes = np.zeros((len(self.poly_names),len(run_DF[2])),dtype=object)
+        
+        orig_size_range = size_range[:]
+        #deal with dates and sizes first
+        for reg_idx, region in enumerate(self.poly_names):
+            size_range = orig_size_range[:]
+            for surv_idx, surv in enumerate(run_DF[2]):
+                if run_DF[1][surv_idx] == 0:
+                    obs_file = self.obs_df1
+                else:
+                    obs_file = self.obs_df2
+                print ''
+                print 'file_num =', run_DF[1][surv_idx]
+                print 'surv_idx =', surv_idx
+                print 'reg_idx =', reg_idx
+                print 'dates =', run_DF[0][surv_idx]
+
+                in_idx = [r for r, date in enumerate(obs_file['Year'].values) if date == year and obs_file['lfs_region'][r] == region and obs_file['Survey'][r] == surv]
+#                 size_range = orig_size_range[:]
+#                 for surv_idx, surv in enumerate(Surveys): #go through prescribed surveys
+#                     in_surv_idx = [r for r in in_reg_idx if obs_file['Survey'][r] == surv] #get each index in prev list where survey is current survey
+                for idx in in_idx:
+                    try:
+                        cur_date = dt.strptime(obs_file['SampleDate'][idx], '%m/%d/%Y 0:00') #SLS format
+                    except ValueError:
+                        cur_date = dt.strptime(obs_file['SampleDate'][idx], '%Y-%m-%d 00:00:00') #20mm format
+                    print cur_date, region, surv
+                    if isinstance(coh_dates[reg_idx][surv_idx], int):
+                        coh_dates[reg_idx][surv_idx] = [cur_date]
+                    else:
+                        coh_dates[reg_idx][surv_idx] = np.append(coh_dates[reg_idx][surv_idx], cur_date)
+                
+                if len(in_idx) > 0:
+                    
+                    coh_dates[reg_idx][surv_idx] = (min(coh_dates[reg_idx][surv_idx]), max(coh_dates[reg_idx][surv_idx]))
+                    if surv_idx == 0:
+                        coh_sizes[reg_idx][surv_idx] = size_range[:]
+                        print size_range
+                    else:
+                        last_date = coh_dates[reg_idx][surv_idx -1][1]
+                        if not isinstance(last_date, float):
+                            time_elapsed = coh_dates[reg_idx][surv_idx][0] - last_date
+                            growth = time_elapsed.days * growthRate
+                            growth_round = int(math.ceil(growth))
+                            size_range[0] += growth_round
+                            size_range[1] += growth_round
+                            coh_sizes[reg_idx][surv_idx] = size_range[:]
+                        else:
+                            coh_sizes[reg_idx][surv_idx] = size_range[:]
+                        print size_range
                 else:
                     coh_sizes[reg_idx][surv_idx] = size_range[:]
                     coh_dates[reg_idx][surv_idx] = (np.nan, np.nan)
@@ -338,7 +412,7 @@ class LongfinMaps(object):
                 all_surveys.append(surv)
                 
         file_sources = [self.obs_df1, self.obs_df2]
-        
+        growth_Rate = self.growth_rate
         for obs_idx, obs_file in enumerate(file_sources):
             dates, sizes = self.get_dates_and_sizes(obs_file, year, Surveys[obs_idx], size_range)
             if obs_idx == 0:
@@ -349,14 +423,128 @@ class LongfinMaps(object):
                 coh_sizes = np.column_stack((coh_sizes, sizes))       
                 
         return coh_dates
-                
+    
+    def get_Chronological_Multicohort_Data(self, year, Surveys, size_range, start_Date=None):  
+        '''
+        Organizes surveys into chronological order, then gets and organizes the BW data accordingly. 
+        By passing in a start date, the user can filter dates prior to date
+        '''
         
-    def get_multiCohort_Data(self, year, Surveys, size_range):
+        all_surv_Dates = []
+        surv_date_info = np.zeros((2, 2), dtype=object)
+        surv_date_info[0][1] = self.obs_df1
+        surv_date_info[1][1] = self.obs_df2
+        for surv_set_idx, surv_set in enumerate(Surveys):
+            surv_date_info[surv_set_idx][0] = np.zeros(len(surv_set), dtype=object)
+            for surv_idx, surv in enumerate(surv_set):
+                date_idxs = [r for r, date in enumerate(surv_date_info[surv_set_idx][1]['Year'].values) if date == year and surv_date_info[surv_set_idx][1]['Survey'][r] == surv]
+                tmp_Dates = []
+                for r in date_idxs:
+                    try:
+                        tmp_Dates.append(dt.strptime(surv_date_info[surv_set_idx][1]['SampleDate'].values[r], '%m/%d/%Y %H:%M'))
+                    except:
+                        tmp_Dates.append(dt.strptime(surv_date_info[surv_set_idx][1]['SampleDate'].values[r], '%Y-%m-%d %H:%M:%S'))
+                        
+                surv_date_info[surv_set_idx][0][surv_idx] = tmp_Dates
+                all_surv_Dates.append([tmp_Dates, surv_set_idx, surv])
+
+        run_DF = pd.DataFrame(all_surv_Dates).sort_values(by=[0]).reset_index(drop=True)
+        
+        Growth_rate = self.growth_rate
+        coh_count = np.zeros((len(self.poly_names),len(run_DF[1])),np.float64)
+        coh_vol = np.zeros((len(self.poly_names), len(run_DF[1])),np.float64)
+        coh_density = np.zeros((len(self.poly_names),len(run_DF[1])),np.float64)
+        coh_abundance = np.zeros((len(self.poly_names),len(run_DF[1])),np.float64)
+        
+
+#             dates, sizes = self.get_dates_and_sizes(datafile, year, Surveys, size_range)
+        coh_dates, coh_sizes = self.get_chron_dates_and_sizes(run_DF, year, size_range, Growth_rate)
+#             
+        for reg_idx, region in enumerate(self.poly_names): #go by each region
+            #find index where the year, region, and listed surveys
+            for surv_idx, surv in enumerate(run_DF[2]):
+                if run_DF[1][surv_idx] == 0:
+                    obs_data = self.obs_df1
+                else:
+                    obs_data = self.obs_df2
+            
+                in_idx = [r for r, date in enumerate(obs_data['Year'].values) if date == year and obs_data['lfs_region'][r] == region and obs_data['Survey'][r] == surv]
+                if start_Date != None:
+                    in_idx = self.filter_by_startDate(in_idx, start_Date)
+                for idx in in_idx:
+                    cur_vol = obs_data['Volume'].values[idx]
+                    if isinstance(coh_sizes[reg_idx][surv_idx], str):
+                        fish_counts = self.countAllFishSizes(idx, obs_data)
+                    else:
+                        fish_counts = self.countSomeFishSizes(idx, coh_sizes[reg_idx][surv_idx], obs_data)    
+                         
+                    coh_count[reg_idx][surv_idx] += fish_counts
+                    coh_vol[reg_idx][surv_idx] += cur_vol   
+                     
+        with open('Cohort_Chron_data_output_{0}.csv'.format(year), 'wb') as outtext:    
+            outtext.write('region,survey,Date_Start,Date_End,year,size min,size max,fish count,volume per Survey,Density in {0} fish per m3,Region Volume,Reg Abundance\n'.format(self.density_units))
+            for reg_idx, region in enumerate(self.poly_names):
+                vol_file_idx = np.where(self.obs_static_vol['region_name'].values == region.replace('_',' '))[0][0]
+                region_vol = self.obs_static_vol['vol_top_999_m'][vol_file_idx]
+                for surv_idx, surv_count in enumerate(coh_count[reg_idx]):
+                    coh_density[reg_idx][surv_idx] = surv_count / coh_vol[reg_idx][surv_idx] 
+                    coh_abundance[reg_idx][surv_idx] = coh_density[reg_idx][surv_idx] * region_vol
+                    coh_abundance = np.nan_to_num(coh_abundance)
+                    try:
+                        outline = ','.join([str(r) for r in [region, surv_idx+1,coh_dates[reg_idx][surv_idx][0].strftime('%m/%d'),coh_dates[reg_idx][surv_idx][1].strftime('%m/%d'), year, coh_sizes[reg_idx][surv_idx][0], coh_sizes[reg_idx][surv_idx][1], surv_count, coh_vol[reg_idx][surv_idx], coh_density[reg_idx][surv_idx] * self.density_units, region_vol, coh_abundance[reg_idx][surv_idx], '\n']])
+                    except AttributeError:
+                        outline = ','.join([str(r) for r in [region, surv_idx+1,'nan','nan', year, coh_sizes[reg_idx][surv_idx][0],coh_sizes[reg_idx][surv_idx][1], surv_count, coh_vol[reg_idx][surv_idx], coh_density[reg_idx][surv_idx] * self.density_units, region_vol, coh_abundance[reg_idx][surv_idx], '\n']])
+                    outtext.write(outline)
+
+        return run_DF, coh_abundance
+    
+    def get_Chronological_Multicohort_Boxwhisker_Data(self, year, Surveys, quantiles_file1, quantiles_file2):  
+        '''
+        Organizes surveys into chronological order, then gets and organizes the BW data accordingly. 
+        '''
+        
+        all_surv_Dates = []
+        surv_date_info = np.zeros((2, 2), dtype=object)
+        surv_date_info[0][1] = self.obs_df1
+        surv_date_info[1][1] = self.obs_df2
+        for surv_set_idx, surv_set in enumerate(Surveys):
+            surv_date_info[surv_set_idx][0] = np.zeros(len(surv_set), dtype=object)
+            for surv_idx, surv in enumerate(surv_set):
+                date_idxs = [r for r, date in enumerate(surv_date_info[surv_set_idx][1]['Year'].values) if date == year and surv_date_info[surv_set_idx][1]['Survey'][r] == surv]
+                tmp_Dates = []
+                for r in date_idxs:
+                    try:
+                        tmp_Dates.append(dt.strptime(surv_date_info[surv_set_idx][1]['SampleDate'].values[r], '%m/%d/%Y %H:%M'))
+                    except:
+                        tmp_Dates.append(dt.strptime(surv_date_info[surv_set_idx][1]['SampleDate'].values[r], '%Y-%m-%d %H:%M:%S'))
+                        
+                surv_date_info[surv_set_idx][0][surv_idx] = tmp_Dates
+                all_surv_Dates.append([tmp_Dates, surv_set_idx, surv])
+
+        run_DF = pd.DataFrame(all_surv_Dates).sort_values(by=[0]).reset_index(drop=True)
+
+#         coh_dates, coh_sizes = self.get_chron_dates_and_sizes(run_DF, year, size_range, Growth_rate)
+#         coh_vals = np.zeros((len(self.poly_names), len(run_DF[1])),dtype=object)
+        for surv_idx, surv in enumerate(run_DF[2]):
+            if run_DF[1][surv_idx] == 0:
+                quant_data = quantiles_file1
+            else:
+                quant_data = quantiles_file2
+            data = self.get_precalc_BW_data([surv], quant_data)
+            if surv_idx == 0:
+                coh_vals = data
+            else:
+                coh_vals = np.column_stack((coh_vals, data))
+
+
+        return run_DF, coh_vals
+    
+    def get_multiCohort_Data(self, year, Surveys, size_range, start_Date=None):
         '''
         structure = [Region1[[surv1, sizes, dates], [surv2, sizes, dates]], Region2[[surv1, sizes, dates], [surv2, sizes, dates]]]
         example: The amount of grown in 14 days is 14 days*0.14 mm/day = 1.96 mm
         '''
-        Growth_rate = .2
+        Growth_rate = self.growth_rate
 #         valid_idx = [r for r, date in enumerate(self.obs_df['Year'].values) if date == year and self.obs_df['Survey'][r] in Surveys]
         total_surv = 0
         all_surveys = []
@@ -374,7 +562,7 @@ class LongfinMaps(object):
         file_sources = [self.obs_df1, self.obs_df2]
         
         for obs_idx, obs_file in enumerate(file_sources):
-            dates, sizes = self.get_dates_and_sizes(obs_file, year, Surveys[obs_idx], size_range)
+            dates, sizes = self.get_dates_and_sizes(obs_file, year, Surveys[obs_idx], size_range, Growth_rate)
             if obs_idx == 0:
                 coh_dates = dates
                 coh_sizes = sizes
@@ -419,12 +607,14 @@ class LongfinMaps(object):
                     self.obs_df = file_sources[1]
             
                 in_idx = [r for r, date in enumerate(self.obs_df['Year'].values) if date == year and self.obs_df['lfs_region'][r] == region and self.obs_df['Survey'][r] == surv]
+                if start_Date != None:
+                    in_idx = self.filter_by_startDate(in_idx, start_Date)
                 for idx in in_idx:
                     cur_vol = self.obs_df['Volume'].values[idx]
                     if isinstance(coh_sizes[reg_idx][surv_idx], str):
-                        fish_counts = self.countAllFishSizes(idx)
+                        fish_counts = self.countAllFishSizes(idx, self.obs_df)
                     else:
-                        fish_counts = self.countSomeFishSizes(idx, coh_sizes[reg_idx][surv_idx])    
+                        fish_counts = self.countSomeFishSizes(idx, coh_sizes[reg_idx][surv_idx], self.obs_df)    
                          
                     coh_count[reg_idx][surv_idx] += fish_counts
                     coh_vol[reg_idx][surv_idx] += cur_vol   
@@ -465,16 +655,16 @@ class LongfinMaps(object):
                     pred_abun[reg_idx][surv_idx] = 0
         return pred_abun
     
-    def countAllFishSizes(self, index):
+    def countAllFishSizes(self, index, obs_data):
         '''add fish at each mm size to one total
         '''
-        size_readings = [r for r in self.obs_df.keys() if 'mm' in r]
+        size_readings = [r for r in obs_data.keys() if 'mm' in r]
         total = 0
         for size in size_readings:
-            total += self.obs_df[size][index]
+            total += obs_data[size][index]
         return total
     
-    def countSomeFishSizes(self, index, size_range):
+    def countSomeFishSizes(self, index, size_range, obs_data):
         '''add fish at specified mm sizes to one total
         '''
         total = 0
@@ -482,8 +672,8 @@ class LongfinMaps(object):
         max = size_range[1]
         for size in range(min, max+1):
             key = str(size) + 'mm'
-            if key in self.obs_df.columns.values:
-                total += self.obs_df[key][index]
+            if key in obs_data.columns.values:
+                total += obs_data[key][index]
             else:
                 print 'Invalid Size of', key
                 continue
@@ -583,9 +773,9 @@ class LongfinMaps(object):
             region_vol = self.obs_static_vol['vol_top_999_m'][vol_file_idx]
             for i, v_idx in enumerate(valid_idx):
                 if isinstance(size_range, str):
-                    fish_counts = self.countAllFishSizes(v_idx)
+                    fish_counts = self.countAllFishSizes(v_idx, self.obs_df)
                 else:
-                    fish_counts = self.countSomeFishSizes(v_idx, size_range)
+                    fish_counts = self.countSomeFishSizes(v_idx, size_range, self.obs_df)
                 cur_survey = self.obs_df['Survey'].values[v_idx]
                 survey_idx = yearly_surveys.index(cur_survey)
                 obs_count[reg_idx][survey_idx] += fish_counts
@@ -595,7 +785,7 @@ class LongfinMaps(object):
                 reg_abundance[reg_idx][survey_idx] += obs_density[reg_idx][survey_idx] * region_vol
         return reg_abundance
     
-    def get_precalc_BW_data(self, surveys):
+    def get_precalc_BW_data(self, surveys, obs_BW_file):
         '''
         reads in calculated trawl file and organizes it into arrays for Box whisker plots
         Also writes out csv file for easy stat reading
@@ -605,21 +795,22 @@ class LongfinMaps(object):
 
         for region in self.poly_names:
 #             print region
-            reg_idx = [r for r, reg in enumerate(self.obs_BW_file['region'].values) if reg == region.replace('_', ' ') and self.obs_BW_file['survey'].values[r] in surveys]
+            reg_idx = [r for r, reg in enumerate(obs_BW_file['region'].values) if reg == region.replace('_', ' ') and obs_BW_file['survey'].values[r] in surveys]
 
             for idx in reg_idx:
-                cur_reg = self.obs_BW_file['region'].values[idx].replace(' ', '_')
+                cur_reg = obs_BW_file['region'].values[idx].replace(' ', '_')
                 reg_idx = self.poly_names.index(cur_reg)
-                cur_surv = self.obs_BW_file['survey'].values[idx]
+                cur_surv = obs_BW_file['survey'].values[idx]
                 surv_idx = surveys.index(cur_surv)
                 
                 item = {}
-                item["med"] = self.obs_BW_file['q50'].values[idx]
-                item["q1"] = self.obs_BW_file['q25'].values[idx]
-                item["q3"] = self.obs_BW_file['q75'].values[idx]
-                item["whislo"] = self.obs_BW_file['q5'].values[idx]
-                item["whishi"] = self.obs_BW_file['q95'].values[idx]
+                item["med"] = obs_BW_file['q50'].values[idx]
+                item["q1"] = obs_BW_file['q25'].values[idx]
+                item["q3"] = obs_BW_file['q75'].values[idx]
+                item["whislo"] = obs_BW_file['q5'].values[idx]
+                item["whishi"] = obs_BW_file['q95'].values[idx]
                 region_stats[reg_idx][surv_idx] = item
+                
         return region_stats
         self.write_Box_Stats(region_stats, 'BoxWhisker_Stats_{0}.csv'.format(self.year))
         
@@ -685,7 +876,7 @@ class LongfinMaps(object):
                 obs_data = self.Abundance_to_Density(obs_data, size_range) #convert abundance data to density
             
             barxy = self.findSiteLoc(self.poly_names) #get xy for each site
-            labels = self.findNoData(Surveys) #find correct labels for surveys with no data
+            labels = self.findNoData(Surveys, self.obs_df) #find correct labels for surveys with no data
             leg_args['max'] = self.get_Plot_Scale(obs_data, 'Bar')
             leg_args['PlotType'] = 'Bar'
             print leg_args['max'], obs_data
@@ -742,9 +933,9 @@ class LongfinMaps(object):
 #             plt.title('Observed {0} {1}'.format(leg_args['ylabel'], self.year))
             barboxsize = [10000.,10000.]
             
-            obs_data = self.get_precalc_BW_data(Surveys)
+            obs_data = self.get_precalc_BW_data(Surveys, self.obs_BW_file)
             barxy = self.findSiteLoc(self.poly_names)
-            labels = self.findNoData(Surveys)
+            labels = self.findNoData(Surveys, self.obs_df)
             
             if leg_args['ylabel'] == 'Density':
                 obs_data = self.Abundance_to_Density(obs_data, size_range) #convert abundance data to density
@@ -771,6 +962,7 @@ class LongfinMaps(object):
         self.datatype = 'Observed' #set this parameter for run specific functions
         self.obs_df = pd.read_csv(longfile_path, parse_dates=True)
         self.obs_static_vol = pd.read_csv(static_volumes_file, parse_dates=True)
+        self.growth_rate = .2
         
         bars = []
         for num in Surveys:
@@ -792,7 +984,7 @@ class LongfinMaps(object):
             if leg_args['ylabel'] == 'Density':
                 plt.title('{0} Estimated Fish per {1} cubic meter {2}'.format(self.runtype.upper(), int(self.density_units), self.year))
             elif leg_args['ylabel'] == 'Abundance':
-                plt.title('Longfin Smelt Survey {0} {1}mm to {2}mm {3} Cohort {4} {5} '.format(Surveys[0], size_range[0], size_range[1], self.runtype.upper(), plot_type, self.year))
+                plt.title('Longfin Smelt {0}mm to {1}mm {2} Cohort {3} {4}'.format(size_range[0], size_range[1], self.runtype.upper(), plot_type, self.year))
                 
             
 #             plt.title('Observed {0} {1}'.format(leg_args['ylabel'], self.year))
@@ -805,11 +997,17 @@ class LongfinMaps(object):
                 coh_data = self.Abundance_to_Density(coh_data, size_range) #convert abundance data to density
             
             barxy = self.findSiteLoc(self.poly_names) #get xy for each site
-            labels = self.findNoData(Surveys) #find correct labels for surveys with no data
+            labels = self.findNoData(Surveys, self.obs_df) #find correct labels for surveys with no data
             leg_args['max'] = self.get_Plot_Scale(coh_data, 'Bar')
             leg_args['PlotType'] = 'Bar'
             Longfin_Plot_Utils.plot_bars(ax, fig, coh_data, barxy, barboxsize, self.xylims,
                                  leg_args, frac=False, labels=labels)
+            
+            xloc = ax.get_xlim()[0] + ((ax.get_xlim()[1] - ax.get_xlim()[0]) * .65) 
+            yloc = ax.get_ylim()[0] + ((ax.get_ylim()[1] - ax.get_ylim()[0]) * .1) 
+            
+            ax.text(xloc, yloc, 'Growth Rate = {0} mm/Day'.format(self.growth_rate))
+
             new_figname = '_'.join([figname, self.runtype.upper(), str(self.year), str(leg_args['ylabel']), '{0}mm-{1}mm.png'.format(size_range[0], size_range[1])])
             plt.savefig(new_figname, dpi=900, facecolor='white',bbox_inches='tight')
     
@@ -819,8 +1017,8 @@ class LongfinMaps(object):
         return
     
     def make_MultiCohort_Bar_Plot(self, longfile_path1, longfile_path2, figname, size_range, static_volumes_file):
-        '''UNDER CONSTRUCTION
-        Create a plot for cohort growth. cohort growth shows a gradual increase of .14 * days between surveys
+        '''
+        Create a plot for cohort growth. cohort growth shows a gradual increase between surveys
         this growth is added to the size range, progressively growing as time goes on.
         includes 2 data sources
         '''
@@ -830,6 +1028,7 @@ class LongfinMaps(object):
         self.obs_df1 = pd.read_csv(longfile_path1, parse_dates=True)
         self.obs_df2 = pd.read_csv(longfile_path2, parse_dates=True)
         self.obs_static_vol = pd.read_csv(static_volumes_file, parse_dates=True)
+        self.growth_rate = .2
         
         bars = []
         for num in self.multisurveys[0]:
@@ -868,9 +1067,9 @@ class LongfinMaps(object):
             barxy = self.findSiteLoc(self.poly_names) #get xy for each site
             
             self.obs_df =  self.obs_df1
-            labels1 = self.findNoData(self.multisurveys[0]) #find correct labels for surveys with no data
+            labels1 = self.findNoData(self.multisurveys[0], self.obs_df) #find correct labels for surveys with no data
             self.obs_df =  self.obs_df2 #set this just for temp reasons
-            labels2 = self.findNoData(self.multisurveys[1])
+            labels2 = self.findNoData(self.multisurveys[1], self.obs_df)
             labels = np.column_stack((labels1, labels2))
             
 #             leg_args['max'] = self.get_Plot_Scale(coh_data, 'Log')
@@ -878,6 +1077,245 @@ class LongfinMaps(object):
             leg_args['PlotType'] = 'Log'
             Longfin_Plot_Utils.plot_bars(ax, fig, coh_data, barxy, barboxsize, self.xylims,
                                  leg_args, frac=False, labels=labels)
+            xloc = ax.get_xlim()[0] + ((ax.get_xlim()[1] - ax.get_xlim()[0]) * .65) 
+            yloc = ax.get_ylim()[0] + ((ax.get_ylim()[1] - ax.get_ylim()[0]) * .1) 
+            
+            ax.text(xloc, yloc, 'Growth Rate = {0} mm/Day'.format(self.growth_rate))
+
+            new_figname = '_'.join([figname, self.runtype.upper(), str(self.year), str(leg_args['ylabel']), '{0}mm-{1}mm.png'.format(size_range[0], size_range[1])])
+            plt.savefig(new_figname, dpi=900, facecolor='white',bbox_inches='tight')
+    
+            plt.close()
+            plt.clf()
+
+        return
+    
+    def make_ST_MultiCohort_Bar_Plot(self, longfile_path1, longfile_path2, figname, size_range, static_volumes_file, start_Date):
+        '''
+        Create a plot for cohort growth. Data before start date is ommited.
+        cohort growth shows a gradual increase s between surveys
+        this growth is added to the size range, progressively growing as time goes on.
+        includes 2 data sources
+        '''
+        self.check_runtype()
+        self.check_multisurveys()
+        self.datatype = 'Observed' #set this parameter for run specific functions
+        self.obs_df1 = pd.read_csv(longfile_path1, parse_dates=True)
+        self.obs_df2 = pd.read_csv(longfile_path2, parse_dates=True)
+        self.obs_static_vol = pd.read_csv(static_volumes_file, parse_dates=True)
+        self.growth_rate = .2
+        
+        bars = []
+        for num in self.multisurveys[0]:
+            bars.append('{0} {1}'.format(os.path.basename(longfile_path1).split('_')[0], num))
+        for num in self.multisurveys[1]:
+            bars.append('{0} {1}'.format(os.path.basename(longfile_path2).split('_')[0], num))
+        barboxsize = [10000.,10000.] #determines size of plots. Don't touch.
+#         plot_types = ['Density', 'Abundance']
+        plot_types = ['Abundance'] #Just abundance atm...
+        for plot_type in plot_types:
+            
+            fig, ax = Longfin_Plot_Utils.draw_water_and_polys(self.grd, self.plot_poly_dict, self.xylims)
+            leg_args = {'ylabel':plot_type,
+                        'bars':bars,
+                        'max':''}
+            
+#             if leg_args['ylabel'] == 'Density':
+#                 leg_args['max'] = self.max_den[self.year]
+#             elif leg_args['ylabel'] == 'Abundance':
+#                 leg_args['max'] = self.max_ab[self.year]
+            if leg_args['ylabel'] == 'Density':
+                plt.title('{0} Estimated Fish per {1} cubic meter {2}'.format(self.runtype.upper(), int(self.density_units), self.year))
+            elif leg_args['ylabel'] == 'Abundance':
+                plt.title('Longfin Smelt {0}mm to {1}mm Cohort {2} {3} '.format(size_range[0], size_range[1], plot_type, self.year))
+                
+            
+            
+            
+            # read observed counts
+#             self.obs_df =  self.obs_df1 #set this just for temp reasons
+            coh_data = self.get_multiCohort_Data(self.year, self.multisurveys, size_range, start_Date=start_Date)
+            
+            if leg_args['ylabel'] == 'Density':
+                coh_data = self.Abundance_to_Density(coh_data, size_range) #convert abundance data to density
+            
+            barxy = self.findSiteLoc(self.poly_names) #get xy for each site
+            
+            self.obs_df =  self.obs_df1
+            labels1 = self.findNoData(self.multisurveys[0], self.obs_df) #find correct labels for surveys with no data
+            self.obs_df =  self.obs_df2 #set this just for temp reasons
+            labels2 = self.findNoData(self.multisurveys[1], self.obs_df)
+            labels = np.column_stack((labels1, labels2))
+            
+#             leg_args['max'] = self.get_Plot_Scale(coh_data, 'Log')
+            leg_args['max'] = self.get_Plot_Scale(coh_data, 'Bar')
+            leg_args['PlotType'] = 'Log'
+            Longfin_Plot_Utils.plot_bars(ax, fig, coh_data, barxy, barboxsize, self.xylims,
+                                 leg_args, frac=False, labels=labels)
+            
+            xloc = ax.get_xlim()[0] + ((ax.get_xlim()[1] - ax.get_xlim()[0]) * .65) 
+            yloc = ax.get_ylim()[0] + ((ax.get_ylim()[1] - ax.get_ylim()[0]) * .1) 
+            
+            ax.text(xloc, yloc, 'Growth Rate = {0} mm/Day \nStart Date = {1}'.format(self.growth_rate, start_Date.strftime('%m-%d-%Y')))
+
+            new_figname = '_'.join([figname, self.runtype.upper(), str(self.year), str(leg_args['ylabel']), '{0}mm-{1}mm.png'.format(size_range[0], size_range[1])])
+            plt.savefig(new_figname, dpi=900, facecolor='white',bbox_inches='tight')
+    
+            plt.close()
+            plt.clf()
+
+        return
+    
+    def make_Chronological_MultiCohort_Bar_Plot(self, longfile_path1, longfile_path2, figname, size_range, static_volumes_file):
+        '''
+        Create a plot for cohort growth sorted chronologically. cohort growth shows a gradual increase between surveys
+        this growth is added to the size range, progressively growing as time goes on.
+        includes 2 data sources
+        '''
+        self.check_runtype()
+        self.check_multisurveys()
+        self.datatype = 'Observed' #set this parameter for run specific functions
+        self.obs_df1 = pd.read_csv(longfile_path1, parse_dates=True)
+        self.obs_df2 = pd.read_csv(longfile_path2, parse_dates=True)
+        self.obs_static_vol = pd.read_csv(static_volumes_file, parse_dates=True)
+        
+        self.growth_rate = 0.2
+        
+        barboxsize = [10000.,10000.] #determines size of plots. Don't touch.
+#         plot_types = ['Density', 'Abundance']
+        plot_types = ['Abundance'] #Just abundance atm...
+        for plot_type in plot_types:
+            
+            fig, ax = Longfin_Plot_Utils.draw_water_and_polys(self.grd, self.plot_poly_dict, self.xylims)
+
+            run_DF, coh_data = self.get_Chronological_Multicohort_Data(self.year, self.multisurveys, size_range)
+            
+            labels = np.chararray((len(self.poly_names), len(run_DF[1])))
+            labels[:] = 'X'
+                
+            bars = []
+            for file_idx, file_num in enumerate(run_DF[1]):
+                if file_num == 0:
+                    bars.append('{0} {1}'.format(os.path.basename(longfile_path1).split('_')[0], run_DF[2][file_idx]))
+                    cur_labs = self.findNoData([run_DF[2][file_idx]], self.obs_df1)
+# 
+#                     for lab_idx in range(len(labels[0])):
+#                         labels[lab_idx][file_idx] = cur_labs[lab_idx][0]
+                else:
+                    bars.append('{0} {1}'.format(os.path.basename(longfile_path2).split('_')[0], run_DF[2][file_idx]))
+                    cur_labs = self.findNoData([run_DF[2][file_idx]], self.obs_df2)
+                    
+                for lab_idx in range(len(labels)):
+                    labels[lab_idx][file_idx] = cur_labs[lab_idx][0]
+                    print self.poly_names[lab_idx], file_idx, cur_labs[lab_idx][0]
+                    
+            leg_args = {'ylabel':plot_type,
+            'bars':bars,
+            'max':''}
+
+
+            
+            if leg_args['ylabel'] == 'Density':
+                plt.title('{0} Estimated Fish per {1} cubic meter {2}'.format(self.runtype.upper(), int(self.density_units), self.year))
+            elif leg_args['ylabel'] == 'Abundance':
+                plt.title('Longfin Smelt {0}mm to {1}mm Chronological Cohort {2} {3} '.format(size_range[0], size_range[1], plot_type, self.year))
+            if leg_args['ylabel'] == 'Density':
+                coh_data = self.Abundance_to_Density(coh_data, size_range) #convert abundance data to density
+                
+            barxy = self.findSiteLoc(self.poly_names) #get xy for each site
+
+            
+#             leg_args['max'] = self.get_Plot_Scale(coh_data, 'Log')
+            leg_args['max'] = self.get_Plot_Scale(coh_data, 'Bar')
+            leg_args['PlotType'] = 'Log'
+            Longfin_Plot_Utils.plot_bars(ax, fig, coh_data, barxy, barboxsize, self.xylims,
+                                 leg_args, frac=False, labels=labels)
+            xloc = ax.get_xlim()[0] + ((ax.get_xlim()[1] - ax.get_xlim()[0]) * .65) 
+            yloc = ax.get_ylim()[0] + ((ax.get_ylim()[1] - ax.get_ylim()[0]) * .1) 
+            
+            ax.text(xloc, yloc, 'Growth Rate = {0} mm/Day'.format(self.growth_rate))
+
+            new_figname = '_'.join([figname, self.runtype.upper(), str(self.year), str(leg_args['ylabel']), '{0}mm-{1}mm.png'.format(size_range[0], size_range[1])])
+            plt.savefig(new_figname, dpi=900, facecolor='white',bbox_inches='tight')
+    
+            plt.close()
+            plt.clf()
+
+        return
+    
+    def make_Chronological_MultiCohort_BoxWhisker_Plot(self, longfile_path1, longfile_path2, quantiles_path1, quantiles_path2, figname, size_range, static_volumes_file):
+        '''
+        Create a plot for cohort growth sorted chronologically. cohort growth shows a gradual increase between surveys
+        this growth is added to the size range, progressively growing as time goes on.
+        includes 4 data sources, longfiles to get dates and the data from precalc files.
+        '''
+        self.check_runtype()
+        self.check_multisurveys()
+        self.datatype = 'Precalculated' #set this parameter for run specific functions
+        self.obs_df1 = pd.read_csv(longfile_path1, parse_dates=True)
+        self.obs_df2 = pd.read_csv(longfile_path2, parse_dates=True)
+        self.quant_df1 = pd.read_csv(quantiles_path1, parse_dates = True)
+        self.quant_df2 = pd.read_csv(quantiles_path2, parse_dates = True)
+        self.obs_static_vol = pd.read_csv(static_volumes_file, parse_dates=True)
+        
+        self.growth_rate = 0.2
+        
+        barboxsize = [10000.,10000.] #determines size of plots. Don't touch.
+#         plot_types = ['Density', 'Abundance']
+        plot_types = ['Abundance'] #Just abundance atm...
+        for plot_type in plot_types:
+            
+            fig, ax = Longfin_Plot_Utils.draw_water_and_polys(self.grd, self.plot_poly_dict, self.xylims)
+
+            run_DF, coh_data = self.get_Chronological_Multicohort_Boxwhisker_Data(self.year, self.multisurveys, self.quant_df1, self.quant_df2)
+            
+            labels = np.chararray((len(self.poly_names), len(run_DF[1])))
+            labels[:] = 'X'
+                
+            boxes = []
+            for file_idx, file_num in enumerate(run_DF[1]):
+                if file_num == 0:
+                    boxes.append('{0} {1}'.format(os.path.basename(longfile_path1).split('_')[0], run_DF[2][file_idx]))
+                    cur_labs = self.findNoData([run_DF[2][file_idx]], self.quant_df1)
+                else:
+                    boxes.append('{0} {1}'.format(os.path.basename(longfile_path2).split('_')[0], run_DF[2][file_idx]))
+                    cur_labs = self.findNoData([run_DF[2][file_idx]], self.quant_df2)
+                    
+                for lab_idx in range(len(labels)):
+                    labels[lab_idx][file_idx] = cur_labs[lab_idx][0]
+                    print self.poly_names[lab_idx], file_idx, cur_labs[lab_idx][0]
+                    
+            leg_args = {'ylabel':plot_type,
+            'boxes':boxes,
+            'max':''}
+
+
+            
+            if leg_args['ylabel'] == 'Density':
+                plt.title('{0} Estimated Fish per {1} cubic meter {2}'.format(self.runtype.upper(), int(self.density_units), self.year))
+            elif leg_args['ylabel'] == 'Abundance':
+                plt.title('Longfin Smelt {0}mm to {1}mm Chronological Cohort {2} {3} '.format(size_range[0], size_range[1], plot_type, self.year))
+            if leg_args['ylabel'] == 'Density':
+                coh_data = self.Abundance_to_Density(coh_data, size_range) #convert abundance data to density
+                
+            barxy = self.findSiteLoc(self.poly_names) #get xy for each site
+
+
+#             self.obs_df =  self.obs_df1
+#             labels1 = self.findNoData(self.multisurveys[0], obs_data) #find correct labels for surveys with no data
+#             self.obs_df =  self.obs_df2 #set this just for temp reasons
+#             labels2 = self.findNoData(self.multisurveys[1], obs_data)
+#             labels = np.column_stack((labels1, labels2))
+            
+#             leg_args['max'] = self.get_Plot_Scale(coh_data, 'Log')
+            leg_args['max'] = self.get_Plot_Scale(coh_data, 'BoxWhisker')
+            leg_args['PlotType'] = 'BoxWhisker'
+            Longfin_Plot_Utils.plot_boxes(ax, fig, coh_data, barxy, barboxsize, self.xylims,
+                                 leg_args, frac=False, labels=labels)
+#             xloc = ax.get_xlim()[0] + ((ax.get_xlim()[1] - ax.get_xlim()[0]) * .65) 
+#             yloc = ax.get_ylim()[0] + ((ax.get_ylim()[1] - ax.get_ylim()[0]) * .1) 
+#             ax.text(xloc, yloc, 'Growth Rate = {0} mm/Day'.format(self.growth_rate))
+
             new_figname = '_'.join([figname, self.runtype.upper(), str(self.year), str(leg_args['ylabel']), '{0}mm-{1}mm.png'.format(size_range[0], size_range[1])])
             plt.savefig(new_figname, dpi=900, facecolor='white',bbox_inches='tight')
     
@@ -933,9 +1371,9 @@ class LongfinMaps(object):
             
             # read observed counts from files, and then stack on top of each other
             self.obs_BW_file = self.obs_BW_file1
-            coh_data1 = self.get_precalc_BW_data(self.multisurveys[0])
+            coh_data1 = self.get_precalc_BW_data(self.multisurveys[0], self.obs_BW_file)
             self.obs_BW_file = self.obs_BW_file2
-            coh_data2 = self.get_precalc_BW_data(self.multisurveys[1])
+            coh_data2 = self.get_precalc_BW_data(self.multisurveys[1], self.obs_BW_file)
             coh_data = np.column_stack((coh_data1, coh_data2))
             
             #convert Density data to abundance if needed
@@ -947,9 +1385,9 @@ class LongfinMaps(object):
             
             #find the labels for each data source, and then merge the two arrays for all data
             self.obs_BW_file = self.obs_BW_file1
-            labels1 = self.findNoData(self.multisurveys[0]) #find correct labels for surveys with no data
+            labels1 = self.findNoData(self.multisurveys[0], self.obs_df) #find correct labels for surveys with no data
             self.obs_BW_file = self.obs_BW_file2 #set this just for temp reasons
-            labels2 = self.findNoData(self.multisurveys[1])
+            labels2 = self.findNoData(self.multisurveys[1], self.obs_df)
             labels = np.column_stack((labels1, labels2))
             
             #Get the plot scale. Max is determined by the highest median here
@@ -1035,9 +1473,9 @@ class LongfinMaps(object):
             
             #get labels for missing data. Pred data cannot have missing labels, so make a dummy set that is all blank.
             self.obs_df =  self.obs_df1
-            labels1 = self.findNoData(self.multisurveys[0]) #find correct labels for surveys with no data
+            labels1 = self.findNoData(self.multisurveys[0], self.obs_df) #find correct labels for surveys with no data
             self.obs_df =  self.obs_df2 #set this just for temp reasons
-            labels2 = self.findNoData(self.multisurveys[1])
+            labels2 = self.findNoData(self.multisurveys[1], self.obs_df)
             coh_labels = np.column_stack((labels1, labels2))
             self.obs_df = self.pred_data
             pred_labels = np.empty_like(pred_data)
@@ -1088,11 +1526,6 @@ class LongfinMaps(object):
         print 'end'
         
 
-                
-        
-        
-
-
     def findSiteLoc(self, site_names):
         # Reads dictionary for easting, northing and returns those coordinates.
         
@@ -1107,14 +1540,17 @@ if __name__ == '__main__':
     # test for single predicted distribution plot
 
     obs_bar = False
-    obs_boxwhisker = True
+    obs_boxwhisker = False
     cohort = False
     multicohort_bar = False
     multicohort_boxwhisker = False
     pred_vs_obs_multicohort = False
+    ST_multicohort_bar = False
+    Chron_multicohort_bar = False
+    Chron_multicohort_Boxwhisker = True
 
     year = 2012 #keep to one year for now, multiyear support coming
-    size_range = [6, 8] #inclusive range for the mm values. so min and max values are included in totals
+    size_range = [6, 10] #inclusive range for the mm values. so min and max values are included in totals
     surveys = [3,4,5,6]
 
     run_dir = r'J:\Longfin\bar_plots\FISH_PTM'
@@ -1155,10 +1591,10 @@ if __name__ == '__main__':
         cbm.make_MultiCohort_Bar_Plot(obs_data1, obs_data2, figname, size_range, static_volumes)
     if multicohort_boxwhisker:
         figname = os.path.join(fig_dir, 'Extended_Cohort_BoxPlots')
-        obs_data1 = r"J:\Longfin\bar_plots\SLS_quantiles_3mm-11mm_2012.csv"
-        obs_data2 = r"J:\Longfin\bar_plots\20mm_quantiles_small_larvae_2012.csv"
+        obs_data1 = r"J:\Longfin\from_Ed\SLS_quantiles_12mm-16mm_2012-3-1_grow0.20_2012.csv"
+        obs_data2 = r"J:\Longfin\from_Ed\20mm_quantiles_12mm-16mm_2012-3-1_grow0.20_2012.csv"
         static_volumes = r"C:\git\longfin_trawl_map\static_volumes_1.25m_NAVD.csv"
-        cbm.multisurveys = [[3,4,5,6], [2,3,4,5,6,7,8,9]]
+        cbm.multisurveys = [[1,2,3,4,5,6], [1,2,3,4,5,6,7,8,9]]
         cbm.runtype = 'sls' #set one the density multiplier
         cbm.make_MultiCohort_BoxWhisker_Plot(obs_data1, obs_data2, figname, size_range, static_volumes)
     if pred_vs_obs_multicohort:
@@ -1167,8 +1603,34 @@ if __name__ == '__main__':
         obs_data2 = r"J:\Longfin\bar_plots\20mm_trawl_summary.csv"
         pred_data = r"J:\Longfin\bar_plots\higher_growth_6_to_10mm\Suisun_passive_abundance.csv"
         static_volumes = r"C:\git\longfin_trawl_map\static_volumes_1.25m_NAVD.csv"
-        cbm.multisurveys = [[3,4,5,6], [2,3,4,5,6,7,8,9]]
+        cbm.multisurveys = [[1,2,3,4,5,6], [2,3,4,5,6,7,8,9]]
         cbm.runtype = 'sls' #set one the density multiplier
         cbm.make_PredvsObs_MultiCohort_Plot(obs_data1, obs_data2, pred_data, figname, size_range, static_volumes)
-
+    if ST_multicohort_bar:
+        figname = os.path.join(fig_dir, 'Starttime_Cohort_BarPlots')
+        obs_data1 = r"J:\Longfin\bar_plots\SLS_trawl_summary.csv"
+        obs_data2 = r"J:\Longfin\bar_plots\20mm_trawl_summary.csv"
+        static_volumes = r"C:\git\longfin_trawl_map\static_volumes_1.25m_NAVD.csv"
+        cbm.multisurveys = [[3,4,5,6], [2,3,4,5,6,7,8,9]]
+        cbm.runtype = 'sls' #set one the density multiplier
+        start_Date = dt(2012, 3, 1)
+        cbm.make_ST_MultiCohort_Bar_Plot(obs_data1, obs_data2, figname, size_range, static_volumes, start_Date)
+    if Chron_multicohort_bar:
+        figname = os.path.join(fig_dir, 'Chronological_Cohort_BarPlots')
+        obs_data1 = r"J:\Longfin\bar_plots\SLS_trawl_summary.csv"
+        obs_data2 = r"J:\Longfin\bar_plots\20mm_trawl_summary.csv"
+        static_volumes = r"C:\git\longfin_trawl_map\static_volumes_1.25m_NAVD.csv"
+        cbm.multisurveys = [[3,4,5,6], [1,2,3,4,5,6,7,8,9]]
+        cbm.runtype = 'sls' #set one the density multiplier
+        cbm.make_Chronological_MultiCohort_Bar_Plot(obs_data1, obs_data2, figname, size_range, static_volumes)
+    if Chron_multicohort_Boxwhisker:
+        figname = os.path.join(fig_dir, 'Chronological_Cohort_BoxWhiskerPlots')
+        obs_data1 = r"J:\Longfin\bar_plots\SLS_trawl_summary.csv"
+        obs_data2 = r"J:\Longfin\bar_plots\20mm_trawl_summary.csv"
+        quantile_path1 = r"J:\Longfin\bar_plots\SLS_quantiles_12mm-16mm_2012-3-1_grow0.30_2012.csv"
+        quantile_path2 = r"J:\Longfin\bar_plots\20mm_quantiles_12mm-16mm_2012-3-1_grow0.30_2012.csv"
+        static_volumes = r"C:\git\longfin_trawl_map\static_volumes_1.25m_NAVD.csv"
+        cbm.multisurveys = [[1,2,3,4,5,6], [1,2,3,4,5,6,7,8,9]]
+        cbm.runtype = 'sls' #set one the density multiplier
+        cbm.make_Chronological_MultiCohort_BoxWhisker_Plot(obs_data1, obs_data2, quantile_path1, quantile_path2, figname, size_range, static_volumes)
 
