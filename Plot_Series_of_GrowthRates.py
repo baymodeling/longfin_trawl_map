@@ -15,7 +15,7 @@ import pylab
 
 
 def make_Daily_Growth_Plot(data_dir, target_growthrate, output_dir):
-    file_form = '*.csv'
+    file_form = '*totals*.csv'
     if not os.path.isdir(output_dir):
         os.mkdir(output_dir)
     files = glob.glob(os.path.join(data_dir, file_form))
@@ -27,7 +27,7 @@ def make_Daily_Growth_Plot(data_dir, target_growthrate, output_dir):
         for component in s_dfile:
             if target_growthrate in component:
                 date_Files[dt.datetime.strptime(s_dfile[3], '%Y-%m-%d')] = dfile
-    
+    print date_Files
     groups = []
     i = 0
     cur = []
@@ -44,7 +44,8 @@ def make_Daily_Growth_Plot(data_dir, target_growthrate, output_dir):
     cur_max = 0
     bw_data = np.zeros(len(groups), dtype=object)     
     for g, group in enumerate(groups):
-        bw_data[g] = np.append(bw_data[g], np.zeros(len(groups) -1, dtype=object))
+        print g, group
+        bw_data[g] = np.append(bw_data[g], np.zeros(len(group), dtype=object))
         for group_idx, group_num in enumerate(group):
             cur = []
             filedate = sorted(date_Files.keys())[group_num]
@@ -77,15 +78,16 @@ def make_Daily_Growth_Plot(data_dir, target_growthrate, output_dir):
         if g != len(groups) - 1:
             ax1.set_xticks([])
         else:
-            new_ticks = ['Survey {0}'.format(g + 1) for g in range(len(groups[0])+ 1)]
-            plt.xticks(np.arange(len(groups[0])+1), new_ticks)
+            new_ticks = ['Survey {0}'.format(r) for r in obs_data['survey'].values]
+            plt.xticks(np.arange(len(new_ticks)), new_ticks)
+    year = os.path.basename(data_dir)
     plt.suptitle('Cohort Plots Growth Rate = {0}'.format(target_growthrate), horizontalalignment='center')
     # plt.xlabel('Surveys', fontweight='bold')
-    figname = os.path.join(output_dir, 'Cohort_Plots_GR_{0}.png'.format(target_growthrate))
+    figname = os.path.join(output_dir, 'Cohort_Plots_GR_{0}_{1}.png'.format(target_growthrate, year))
     plt.savefig(figname, dpi=400, facecolor='white',bbox_inches='tight')
     plt.close()
 if __name__  == '__main__':
-    data_dir = r'C:\git\longfin_trawl_map\2013'
-    target_growthrate = '0.14'
+    data_dir = r'J:\Longfin\bar_plots\1999'
+    target_growthrate = '0.20'
     output_dir = 'GrowthRate'
     make_Daily_Growth_Plot(data_dir, target_growthrate, output_dir)

@@ -11,6 +11,7 @@ import pdb
 import matplotlib.pyplot as plt
 from matplotlib.transforms import Bbox
 from rmapy.utils.gis import polygons_w_attributes_from_shp as polys_from_shp
+import math
 
 matplotlib.rcParams['hatch.linewidth'] = 0.7
 matplotlib.rcParams['hatch.color'] = 'w'
@@ -65,11 +66,11 @@ def plot_boxes(ax, fig, data, xy, boxsize, xylims, leg_args, frac=True,
     fig.show()
     fig.canvas.draw()
     # Determine plot limits
-    if frac:
-        plot_range = [0.,1.]
-    else:
+#     if leg_args['PlotType'] == 'Log':
+#         plot_range = [0.,math.log(leg_args['max'])]
+#     else:
         #plot_range = [0,np.amax(data[np.where(np.isfinite(xy[:,0]))])]
-        plot_range = [0,leg_args['max']]
+    plot_range = [0,leg_args['max']]
 
     ax.set_xlim(xylims[0],xylims[1])
     ax.set_ylim(xylims[2],xylims[3])
@@ -77,7 +78,7 @@ def plot_boxes(ax, fig, data, xy, boxsize, xylims, leg_args, frac=True,
     ax.set_aspect('equal', adjustable='box-forced')
     ax.xaxis.set_visible(False)
     ax.yaxis.set_visible(False)
-
+    plotType = leg_args['PlotType']
     #Plots box plots at given locations (x centered over point, y bottom at point)
     for p in range(num_plots):
         if np.isfinite(xy[p,0]):
@@ -87,10 +88,10 @@ def plot_boxes(ax, fig, data, xy, boxsize, xylims, leg_args, frac=True,
             fig_coords = fig.transFigure.inverted().transform(disp_coords) #convert coords into ratios
             if len(labels) > 1:
                 plotBWPlot(fig_coords, data[p,:],fig, plot_range,
-                             alt_hatch=alt_hatch, labels=labels[p,:])
+                             alt_hatch=alt_hatch, labels=labels[p,:], plotType=plotType)
             else:
                 plotBWPlot(fig_coords, data[p,:],fig, plot_range,
-                             alt_hatch=alt_hatch)
+                             alt_hatch=alt_hatch, plotType=plotType)
             fig.canvas.draw()
 #     xy_leg = [589782.5317557553,4187778.3682879894] # move to main, Legend coords
     xy_leg = [554742.1172539165,4275228.120412473] # move to main
@@ -123,7 +124,7 @@ def plot_boxes(ax, fig, data, xy, boxsize, xylims, leg_args, frac=True,
     
     
 def plotBWPlot(xys, box_vals, fig, y_range, legend=False, alt_hatch=False,
-                 xlabels=[], ylabel=[], labels=[]):
+                 xlabels=[], ylabel=[], labels=[], plotType=''):
     # Plots a box graphs with the given bar names and values at the x,y coordinates of the Delta map.
     
     #Create axes
@@ -138,13 +139,20 @@ def plotBWPlot(xys, box_vals, fig, y_range, legend=False, alt_hatch=False,
     if not legend:
         ax = fig.add_axes(Bbox(xys))
         ind = np.arange(len(tot_box_vals))
+        for val in tot_box_vals:
+            for i in val.keys():
+                if np.isnan(val[i]):
+                    val[i] = .00001
         box1 = ax.bxp(tot_box_vals, showfliers=False, patch_artist=True)
-    
+        ax.set_yscale('log')
         for pn, patch in enumerate(box1['boxes']): #colors each survey its own color from the color scale
             patch.set(facecolor=colors[pn], edgecolor=colors[pn]) 
             plt.setp(box1['whiskers'][pn*2], color=colors[pn]) #Note, each whisker is its own entity
             plt.setp(box1['whiskers'][pn*2+1], color=colors[pn])
             plt.setp(box1['medians'][pn], color='black')
+        if plotType == 'Log':
+            ax.set_yscale('log')
+#         else:
         ax.set_ylim(y_range[0],y_range[1])
         ax.patch.set_alpha(0) 
 #         
@@ -180,7 +188,7 @@ def plotBWPlot(xys, box_vals, fig, y_range, legend=False, alt_hatch=False,
             else:
                 for tick, label in zip(range(numBoxes), tot_labels):
                     ax.text(pos[tick], 0.05, label, ha='center', va='bottom', color='red', fontsize=7)
-                    
+
     else: #legend plot
         ax = fig.add_axes(Bbox(xys))
 #         ind = np.arange(5, (len(tot_box_vals) + 1)* 5, 5)
@@ -208,15 +216,16 @@ def plotBWPlot(xys, box_vals, fig, y_range, legend=False, alt_hatch=False,
             ytick_max = int(y_range[1])/100000*100000
             ax.set_yticks([0,ytick_max])
             exponent = np.log10(ytick_max)
-            if exponent - int(exponent) == 0.:
-                ax.set_yticklabels(['0','10$^%d$'%(exponent)])
+#             if exponent - int(exponent) == 0.:
+#                 ax.set_yticklabels(['0','10$^%d$'%(exponent)])
 
         except OverflowError: #if the max is too small, you get an overflow error. then just use the normal number
             ytick_max = int(y_range[1])
             ax.set_yticks([0,ytick_max])
-            ax.set_yticklabels(['0','{0}'.format(ytick_max)])
+#             ax.set_yticklabels(['0','{0}'.format(ytick_max)])
         ax.set_ylim(y_range[0], ytick_max)
         ax.set_ylabel(ylabel)
+#         ax.set_yscale('log')
     
 def plot_bars(ax, fig, data, xy, boxsize, xylims, leg_args, frac=True, 
               alt_hatch=False, labels=[]):

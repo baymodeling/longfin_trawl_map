@@ -1385,21 +1385,21 @@ class LongfinMaps(object):
             
             #find the labels for each data source, and then merge the two arrays for all data
             self.obs_BW_file = self.obs_BW_file1
-            labels1 = self.findNoData(self.multisurveys[0], self.obs_df) #find correct labels for surveys with no data
+            labels1 = self.findNoData(self.multisurveys[0], self.obs_BW_file) #find correct labels for surveys with no data
             self.obs_BW_file = self.obs_BW_file2 #set this just for temp reasons
-            labels2 = self.findNoData(self.multisurveys[1], self.obs_df)
+            labels2 = self.findNoData(self.multisurveys[1], self.obs_BW_file)
             labels = np.column_stack((labels1, labels2))
             
             #Get the plot scale. Max is determined by the highest median here
             leg_args['max'] = self.get_Plot_Scale(coh_data, 'BoxWhisker')
             
             #set the plot type. Could have functionality for plot scaling, but for now doesn't do anything
-            leg_args['PlotType'] = 'Log'
+            leg_args['PlotType'] = ''
             
             #Plot the data and save
             Longfin_Plot_Utils.plot_boxes(ax, fig, coh_data, barxy, barboxsize, self.xylims,
                                  leg_args, frac=False, labels=labels)
-            new_figname = '_'.join([figname, self.runtype.upper(), str(self.year), str(leg_args['ylabel']), '{0}mm-{1}mm.png'.format(size_range[0], size_range[1])])
+            new_figname = '_'.join([figname, self.runtype.upper(), str(self.year), str(leg_args['ylabel']), leg_args['PlotType'], '{0}mm-{1}mm.png'.format(size_range[0], size_range[1])])
             plt.savefig(new_figname, dpi=900, facecolor='white',bbox_inches='tight')
     
             plt.close()
@@ -1543,11 +1543,11 @@ if __name__ == '__main__':
     obs_boxwhisker = False
     cohort = False
     multicohort_bar = False
-    multicohort_boxwhisker = False
+    multicohort_boxwhisker = True
     pred_vs_obs_multicohort = False
     ST_multicohort_bar = False
     Chron_multicohort_bar = False
-    Chron_multicohort_Boxwhisker = True
+    Chron_multicohort_Boxwhisker = False
 
     year = 2012 #keep to one year for now, multiyear support coming
     size_range = [6, 10] #inclusive range for the mm values. so min and max values are included in totals
