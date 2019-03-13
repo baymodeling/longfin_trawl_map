@@ -1,410 +1,725 @@
 '''
-Created on Nov 26, 2018
+Created on Feb 18, 2019
 
-@author: scott, ed, laurel
+@author: scott
 '''
-
-import matplotlib
-import pylab
-import numpy as np
-import pdb
-import matplotlib.pyplot as plt
-from matplotlib.transforms import Bbox
+import os
 from rmapy.utils.gis import polygons_w_attributes_from_shp as polys_from_shp
-import math
+from stompy.grid import unstructured_grid
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.transforms import Bbox
+import pylab
+import pandas as pd
+import datetime as dt
 
-matplotlib.rcParams['hatch.linewidth'] = 0.7
-matplotlib.rcParams['hatch.color'] = 'w'
-
-def draw_water_and_polys(grid, plot_poly_dict, xylims):
-
-    fig = plt.figure(figsize=[10,10])
-    ax = fig.add_subplot(111)
-
-    # plot grid in solid blue color
-    g_mask, e_mask = get_grid_masks(grid, xylims)
-    blu = '#add8e6'
-    grey = '#A9A9A9'
-    gcoll = grid.plot_cells(mask=g_mask, facecolor=blu, 
-                                edgecolor=blu)
-
-    # plot relevant polygons
-    polys_from_shp.plot_polygons(plot_poly_dict,color=grey)
-
-    return fig, ax
-
-
-def get_grid_masks(grid, xylims):
-    g = grid
-    centers = g.cells_center(refresh=True)
-    g_mask = g.cell_clip_mask(xylims)
-    e_mask = g.edge_clip_mask(xylims)
-
-    return g_mask, e_mask
-
-
-def plot_boxes(ax, fig, data, xy, boxsize, xylims, leg_args, frac=True, 
-              alt_hatch=False, labels=[]):
+class LongfinMap(object):
     '''
-    Functions similar to the map_w_bars plot. Takes in the following arguments:
-    ax: plot frame, should already exist from draw_water_and_polys() in Longfin bar. Be sure that gets called first.
-    fig: Figure frame, same as ax.
-    data: numpy array that contains all of the data for every bar plot. formatted as such:
-                        region -> Survey -> dict{med, q1, q3, whislo, whishi}
-            9 regions with 9 surveys will end up being 81 dictionaries!
-    xy: xy locations dictionary for each bar plot. Comes from findSiteLoc()
-    boxsize: size of the plots. 10,000x10,000 looks good.
-    xylims: plot x and y limits for frame reference
-    leg_args: arguments for the plot legend labels
-    labels: array of labels for the bar plots, containing x's for areas with missing data. Array of lists, region -> surveys
+    Class for plotting Longfin Trawl map data. Contains data for plot locations and regions.
+    Set up data into appropriate dataFrames before using this class. Gets Automatically set up in the
+    LongfinPlotter class.
     
-    the script will iterate through each region and plot each bar graph separately. It will convert the coords into ratios
-    of the plot window. The plot needs to redraw each time or else it gets confused and the plots will be offset.
-    After all the bar plots are plotted, the legend is plotted below those.
+    inputs:
+    run_dir: Run directory containing ptm.grd file
+    grd_file: Grid file, likely named 'ptm.grd'
+    year: Year of the run. currently does not support multiyear data
+    sizes: List of the upper and lower bound of the longfin sizes in mm. List is inclusive. ex: [6, 10]
+    surveys: takes in a list of surveys to be used for the plot. Each input data file needs its own list of data,
+             aka if there are two input data sources, the surveys list should contain 2 lists (ex [[3,4,5,6], [1,2,3,4,5,6,7,8,9]])
+             if there is only one data source, a single list suffices (ex [2,3,4,5])
+             If there are multiple data sources and the user inputs a single list (see above), all data sources will
+             use the selected surveys.
     '''
-    num_plots = len(data)
-    fig.show()
-    fig.canvas.draw()
-    # Determine plot limits
-#     if leg_args['PlotType'] == 'Log':
-#         plot_range = [0.,math.log(leg_args['max'])]
-#     else:
-        #plot_range = [0,np.amax(data[np.where(np.isfinite(xy[:,0]))])]
-    plot_range = [0,leg_args['max']]
 
-    ax.set_xlim(xylims[0],xylims[1])
-    ax.set_ylim(xylims[2],xylims[3])
+    def __init__(self,
+                 run_dir,
+                 grd_file,
+                 year,
+                 sizes,
+                 surveys):
+        self.run_dir = run_dir
+        self.grd_file = grd_file
+        self.Year = year
+        self.Sizes = sizes
+        self.Surveys = surveys
+        self.compare = False
+        self._get_inputs()
 
-    ax.set_aspect('equal', adjustable='box-forced')
-    ax.xaxis.set_visible(False)
-    ax.yaxis.set_visible(False)
-    plotType = leg_args['PlotType']
-    #Plots box plots at given locations (x centered over point, y bottom at point)
-    for p in range(num_plots):
-        if np.isfinite(xy[p,0]):
-            bb_data = Bbox.from_bounds(xy[p,0]-boxsize[0]/2., xy[p,1], 
-                                       boxsize[0], boxsize[1])
-            disp_coords = ax.transData.transform(bb_data)
-            fig_coords = fig.transFigure.inverted().transform(disp_coords) #convert coords into ratios
-            if len(labels) > 1:
-                plotBWPlot(fig_coords, data[p,:],fig, plot_range,
-                             alt_hatch=alt_hatch, labels=labels[p,:], plotType=plotType)
-            else:
-                plotBWPlot(fig_coords, data[p,:],fig, plot_range,
-                             alt_hatch=alt_hatch, plotType=plotType)
-            fig.canvas.draw()
-#     xy_leg = [589782.5317557553,4187778.3682879894] # move to main, Legend coords
-    xy_leg = [554742.1172539165,4275228.120412473] # move to main
-
-    mod = len(leg_args['boxes']) / 4 # figure out how long to make the legend, every 4 items make more room
-    if len(leg_args['boxes']) % 4 != 0:
-        mod += 1
-    bb_data = Bbox.from_bounds(xy_leg[0]-boxsize[0]/2., xy_leg  [1], 
-                               boxsize[0]* mod, boxsize[1])
-    disp_coords = ax.transData.transform(bb_data)
-    fig_coords= fig.transFigure.inverted().transform(disp_coords)
-    if alt_hatch:
-        boxes=leg_args['boxes']*2
-    else:
-        boxes=leg_args['boxes']
-    legend_data = {"med": plot_range[1] * .5, #make a dummy legend with perfect data
-                   "q1": plot_range[1] * .25,
-                   "q3": plot_range[1] * .75,
-                   "whislo": plot_range[0],
-                   "whishi": plot_range[1]}
-    legend_array = []
-    for i in range(len(boxes)):
-        legend_array.append(legend_data)
-    plotBWPlot(fig_coords, legend_array, fig, plot_range,
-                 legend=True, alt_hatch=alt_hatch, 
-                 xlabels=boxes, ylabel=leg_args['ylabel'])
-
-
-    return 
-    
-    
-def plotBWPlot(xys, box_vals, fig, y_range, legend=False, alt_hatch=False,
-                 xlabels=[], ylabel=[], labels=[], plotType=''):
-    # Plots a box graphs with the given bar names and values at the x,y coordinates of the Delta map.
-    
-    #Create axes
-    tot_box_vals = np.empty(0)
-    tot_labels = np.empty(0)
-    for item in box_vals:
-        tot_box_vals = np.append(tot_box_vals, item)
-    for item in labels:
-        tot_labels = np.append(tot_labels, item)
-    cmap_pars = pylab.cm.get_cmap('spring')
-    colors=[cmap_pars(float(ng)/float(len(tot_box_vals))) for ng in range(len(tot_box_vals))]        
-    if not legend:
-        ax = fig.add_axes(Bbox(xys))
-        ind = np.arange(len(tot_box_vals))
-        for val in tot_box_vals:
-            for i in val.keys():
-                if np.isnan(val[i]):
-                    val[i] = .00001
-        box1 = ax.bxp(tot_box_vals, showfliers=False, patch_artist=True)
-        ax.set_yscale('log')
-        for pn, patch in enumerate(box1['boxes']): #colors each survey its own color from the color scale
-            patch.set(facecolor=colors[pn], edgecolor=colors[pn]) 
-            plt.setp(box1['whiskers'][pn*2], color=colors[pn]) #Note, each whisker is its own entity
-            plt.setp(box1['whiskers'][pn*2+1], color=colors[pn])
-            plt.setp(box1['medians'][pn], color='black')
-        if plotType == 'Log':
-            ax.set_yscale('log')
-#         else:
-        ax.set_ylim(y_range[0],y_range[1])
-        ax.patch.set_alpha(0) 
-#         
-        # annotate
-        ymax = y_range[1]
-#         for nbv,bv in enumerate(tot_box_vals):
-#             if bv['whishi'] > ymax:
-#                 plt.annotate("%.0E"%(bv['whishi']),[ind[nbv]-0.5,0.65*ymax],rotation=90)
+    def _get_inputs(self):
+        '''
+        Prime variables and data to be used across all cases, such as xylimits, hatching region shp, 
+        and region coordinates for plotting.
+        '''
+        # inputs used across all CAMT cases
+        self.xylims = [530000,661500,4138000,4295000]
+        shp = r"..\Longfin_hatching_regions.shp"
+        dict_field_name = 'Region'
+        inpfile = 'FISH_PTM.inp'
         
-#         ax.set_frame_on(False)
-#         ax.xaxis.set_visible(False)
-#         ax.yaxis.set_visible(False)
-        ax.spines['right'].set_visible(False)
-        ax.spines['top'].set_visible(False)
-        ax.spines['left'].set_visible(False)
-        ax.set_yticklabels([])
-        plt.tick_params(
-            axis='both',          # changes apply to the x-axis
-            which='both',      # both major and minor ticks are affected
-            bottom=False,      # ticks along the bottom edge are off
-            top=False,
-            left=False,         # ticks along the edge are off
-            labelbottom=False,
-            labelleft=False,
-            labeltop=False) # labels along the bottom edge are off
+        skip_regions=[]
         
-        numBoxes = len(tot_box_vals)
-        pos = np.arange(numBoxes) + 1
-        if len(tot_labels) > 0:
-            if len(tot_labels) > 10:
-                for tick, label in zip(range(numBoxes), tot_labels):
-                    ax.text(pos[tick], 0.05, label, ha='center', va='bottom', color='red', fontsize=5)
-            else:
-                for tick, label in zip(range(numBoxes), tot_labels):
-                    ax.text(pos[tick], 0.05, label, ha='center', va='bottom', color='red', fontsize=7)
+        self.FRAC_FLAG = True
+        
+        self.inpfile = os.path.join(self.run_dir,inpfile)
 
-    else: #legend plot
-        ax = fig.add_axes(Bbox(xys))
-#         ind = np.arange(5, (len(tot_box_vals) + 1)* 5, 5)
-        ind = np.arange(len(tot_box_vals))
-        widths = [.5] * len(tot_box_vals)
-        box1 = ax.bxp(tot_box_vals,positions=ind,widths=widths,showfliers=False,patch_artist=True)
-        for pn, patch in enumerate(box1['boxes']):
-            patch.set(facecolor=colors[pn], edgecolor=colors[pn]) 
-            plt.setp(box1['whiskers'][pn*2], color=colors[pn])
-            plt.setp(box1['whiskers'][pn*2+1], color=colors[pn])
-            plt.setp(box1['medians'], color='black')
-        ax.set_ylim(y_range[0],y_range[1])
+        # Read .shp file
+        atts,pdict = polys_from_shp.PolysWAtts(shp,poly_dict=True, dict_field_name=dict_field_name)
+        self.poly_names = atts[dict_field_name]
+        self.pdict = pdict
+
+        self.plot_poly_dict = {}
+        for npoly,pname in enumerate(self.poly_names):
+            pname_=pname.replace(" ","_")
+            if pname_ not in skip_regions:            
+                self.plot_poly_dict[pname_] = self.pdict[pname_]
+          
+        # use FISH-PTM grid for background with both models
+        self.grd = unstructured_grid.PtmGrid(self.grd_file)
+        
+        self.utm_dict = {'Central_Delta_and_Franks_Tract':[620453.7400469416,4212122.078372202],
+            'Upper_Sacramento_River':[629749.8528383253,4244678.154020051],
+            'North_and_South_Forks_Mokelumne_River':[633314.2013617393,4222644.2739934],
+            'South_Delta':[642592.4377057501,4189918.7990992256],
+            'Cache_Slough_Complex':[615123.5756282026,4262158.33897849],
+            'Confluence':[606111.7244591176,4214227.897524303],
+            'Suisun_Bay':[587330.4530226303,4207893.7344756285],
+            'Carquinez_Strait':[571227.4604096551,4209182.676400363], 
+            'Suisun_Marsh':[586210.4760883171,4225235.907484644],
+            'San_Pablo_Bay':[553942.9282736651,4208647.568697553],
+            'Petaluma':[540030.1280006216,4221490.153564978],
+            'South_SF_Bay':[566963.8823753597,4165482.214004264],
+            'Central_SF_Bay':[550375.5435882693,4192415.9683790025], 
+            'Lower_South_SF_Bay':[586049.3904422284,4145683.2290003207], 
+            'Napa_Sonoma':[556261.7283191724,4226662.861358802]}
+        
+        self.xy_leg = [554742.1172539165,4275228.120412473]
+
+        return
+    
+    def _get_grid_masks(self, xylims):
+        '''
+        gets mask to clip grid plot
+        '''
+        
+        g = self.grd
+        centers = g.cells_center(refresh=True)
+        g_mask = g.cell_clip_mask(xylims)
+        e_mask = g.edge_clip_mask(xylims)
+    
+        return g_mask, e_mask
+    
+    def _get_Plot_Labels(self, Filtered_DataFrame):
+        '''
+        find data for each region plot. Returns list of labels.
+        If a survey doesn't have data, a red 'x' is plotted. Else, its blank.
+        '''
+        
+        Surveys = Filtered_DataFrame['Survey']
+        labels = np.chararray(len(Surveys))
+        labels[:] = 'X'
+        i = 0
+        for index, row in Filtered_DataFrame.iterrows():
+            if self.plotType == 'bar':
+                if row['Abundance'] > 0.0 and row['Density'] > 0.0:
+                    labels[i] = ''
+            elif self.plotType == 'boxwhisker':
+                if row['q5'] > 0.0:
+                    labels[i] = ''
+            i += 1
+        return labels
+        
+    def _get_Plot_Scale(self, DataFrame, Var):
+        '''
+        Gets the Max data for plot.
+        Boxwhisker plots use the max from the q50 value, the mean
+        Log plots will round the number off to look nice for exponents.
+        '''
+        
+        if self.plotType == 'boxwhisker':
+            max_val = max(DataFrame['q50'].values)
+            len_max = (len(str(max_val).split('.')[0]) - 2) * -1
+            scaler = round(max_val, len_max)
+            
+        elif self.plotType == 'bar':
+            max_val = max(DataFrame[Var].values)
+            len_max = (len(str(max_val).split('.')[0]) - 2) * -1
+            scaler = round(max_val, len_max)
+            
+        if self.Log:
+            if str(max_val).split('.')[0][:len_max] != 10:
+                num_zero = (len_max * -1) + 1
+            scaler = int('10' + '0'*num_zero)
+            
+        return scaler
+    
+
+    
+    def _get_Unique_Surveys(self, DataFrame):
+        '''
+        Gets the number of unique surveys in a dataset for legend plotting
+        '''
+    
+        counted_Surveys = []
+        for index, row in DataFrame.iterrows():
+            survey = row['Survey']
+            source = row['Source']
+            SurvSource = (survey, source)
+            if SurvSource not in counted_Surveys:
+                counted_Surveys.append(SurvSource)
+                
+        return counted_Surveys
+        
+    def _get_Plot_Legend_labels(self, SurveySources):
+        '''
+        Reads in the source files to figure out what the labels are for the legend.
+        If the label is unknown, then ask the user what to use for that source file.
+        If additional entries are wanting to be saved, add them to the if/elif/else loop
+        '''
+        unknown_Sources = {}
+        plot_Legend = []
+        for SurvSource in SurveySources: 
+            
+            survey = SurvSource[0]  
+            source = os.path.basename(SurvSource[1])
+
+            if 'sls' in source.lower():
+                plot_Legend.append('SLS {0}'.format(int(survey)))
+            elif '20mm' in source.lower():
+                plot_Legend.append('20mm {0}'.format(int(survey)))
+            elif 'computed' == source.lower():
+                plot_Legend.append('Computed'.format(int(survey)))
+            else:
+                if source not in unknown_Sources.keys():
+                    print 'Unknown data source {0}'.format(os.path.basename(source))
+                    unknown_ID = raw_input('Please enter a 3 letter ID for new data source: ')
+                    plot_Legend.append('{0} {1}'.format(unknown_ID, int(survey)))
+                    unknown_Sources[os.path.basename(source)] = unknown_ID
+                else:
+                    plot_Legend.append('{0} {1}'.format(unknown_Sources[os.path.basename(source)], survey))
+                    
+        return plot_Legend
+    
+    def _get_Fig_Coordinates(self, fig, ax, XY, boxsize, mod=1.):
+        '''
+        Gets Coordinates and transforms them into percentages of the plot
+        mod is for legend plots, if the plot has more than 4 surveys, another plot length is added for
+        every 4 surveys to prevent crowding.
+        '''
+        
+        bb = Bbox.from_bounds(XY[0]-boxsize[0]/2., XY[1], boxsize[0] * mod, boxsize[1])
+        disp_coords = ax.transData.transform(bb)
+        fig_coords = fig.transFigure.inverted().transform(disp_coords)
+        
+        return fig_coords
+    
+    def _get_Legend_size_Modifier(self, DataFrame, Var):
+        '''
+        Gets the legend modifier based on the amount of datasets.
+        For ever 4 datasets, the plot gets longer in the x direction.
+        This prevents labels and legend from becoming bunched.
+        '''
+        if self.plotType == 'bar':
+            data_len = len(DataFrame[Var])
+        elif self.plotType == 'boxwhisker':
+            data_len = len(DataFrame['q5'])
+        if self.compare:
+            data_len *= 1.5
+        mod = data_len / 4
+        if data_len % 4 != 0:
+                mod += 1
+        return mod
+    
+    def _make_Legend_Data(self, num_Surveys, Plot_Maximum):
+        '''
+        Makes dummy legend data to look nice for legend plot.
+        '''
+        
+        legend_data = []
+        for i in range(num_Surveys):
+            if self.plotType == 'bar':
+                legend_data.append(Plot_Maximum)
+            elif self.plotType == 'boxwhisker':
+                if self.Log:
+                    plot_minimum = 1000. if Plot_Maximum > 10000 else 1.
+                    legend_data.append({"med": 10**np.mean([np.log10(plot_minimum), np.log10(Plot_Maximum)]), #make a dummy legend with perfect data
+                                       "q1": 10**(np.mean([np.log10(plot_minimum), np.mean([np.log10(plot_minimum), np.log10(Plot_Maximum)])])),
+                                       "q3": 10**(np.mean([np.mean([np.log10(plot_minimum), np.log10(Plot_Maximum)]), np.log10(Plot_Maximum)])),
+                                       "whislo": plot_minimum,
+                                       "whishi": Plot_Maximum})
+                else:
+                    legend_data.append({"med": Plot_Maximum * .5, #make a dummy legend with perfect data
+                                        "q1": Plot_Maximum * .25,
+                                        "q3": Plot_Maximum * .75,
+                                        "whislo": 0,
+                                        "whishi": Plot_Maximum})
+        return legend_data
+    
+    def _draw_water_and_polys(self, fig, ax, xylims):
+        '''
+        Plots the grid in solid blue color, ie water
+        '''
+
+        g_mask, e_mask = self._get_grid_masks(xylims)
+        blu = '#add8e6'
+        grey = '#A9A9A9'
+        gcoll = self.grd.plot_cells(mask=g_mask, facecolor=blu, 
+                                    edgecolor=blu)
+    
+        # plot relevant polygons
+        polys_from_shp.plot_polygons(self.plot_poly_dict,color=grey)
+
+        return fig, ax
+    
+    def _configure_Legend(self, ax, Plot_maximum, Labels, Var):
+        '''
+        Configures the legend to make it pretty. 
+        Removes axis, sets limits, and arranges the label format
+        '''
+        
+        ax.set_ylim(0,Plot_maximum)
         ax.patch.set_alpha(0) 
         ax.set_frame_on(False)
         ax.xaxis.set_visible(True)
         ax.yaxis.set_visible(True)
-        if alt_hatch:
-            xticks = np.arange(0,len(tot_box_vals),5)+0.5
-        else:
-            xticks = ind
-        ax.set_xticks(xticks)
-        ax.set_xticklabels(xlabels,rotation=90,ha='center')
-        ax.set_yticks(ax.get_yticks()[::2])
-        try:
-            ytick_max = int(y_range[1])/100000*100000
-            ax.set_yticks([0,ytick_max])
-            exponent = np.log10(ytick_max)
-#             if exponent - int(exponent) == 0.:
-#                 ax.set_yticklabels(['0','10$^%d$'%(exponent)])
+        
+        if self.plotType == 'bar':
+            xticks = np.arange(0, len(Labels)* 10, 10)
 
-        except OverflowError: #if the max is too small, you get an overflow error. then just use the normal number
-            ytick_max = int(y_range[1])
-            ax.set_yticks([0,ytick_max])
-#             ax.set_yticklabels(['0','{0}'.format(ytick_max)])
-        ax.set_ylim(y_range[0], ytick_max)
-        ax.set_ylabel(ylabel)
-#         ax.set_yscale('log')
-    
-def plot_bars(ax, fig, data, xy, boxsize, xylims, leg_args, frac=True, 
-              alt_hatch=False, labels=[]):
-    num_plots = len(data)
-    fig.show()
-    fig.canvas.draw()
-    # Determine plot limits
-    if frac:
-        plot_range = [0.,1.]
-    else:
-        #plot_range = [0,np.amax(data[np.where(np.isfinite(xy[:,0]))])]
-        plot_range = [0,leg_args['max']]
-
-    ax.set_xlim(xylims[0],xylims[1])
-    ax.set_ylim(xylims[2],xylims[3])
-
-    ax.set_aspect('equal', adjustable='box-forced')
-    ax.xaxis.set_visible(False)
-    ax.yaxis.set_visible(False)
-    plotType = leg_args['PlotType']
-    if 'obspred_label' in leg_args.keys():
-        ylabel = leg_args['obspred_label']
-    else:
-        ylabel = ''
-    #Plots bar plots at given locations (x centered over point, y bottom at point)
-    for p in range(num_plots):
-        if np.isfinite(xy[p,0]):
-            bb_data = Bbox.from_bounds(xy[p,0]-boxsize[0]/2., xy[p,1], 
-                                       boxsize[0], boxsize[1])
-            disp_coords = ax.transData.transform(bb_data)
-            # Ben - what is this doing? Why does it need fig and not ax?
-            fig_coords = fig.transFigure.inverted().transform(disp_coords)
-            if len(labels) > 1:
-                plotBarGraph(fig_coords, data[p,:],fig, plot_range, plotType,
-                             alt_hatch=alt_hatch, labels=labels[p,:], ylabel=ylabel)
+        elif self.plotType == 'boxwhisker':
+            if self.compare:
+                xticks = list(np.arange(0, len(Labels)*1.5))
+                del xticks[2::3]
             else:
-                plotBarGraph(fig_coords, data[p,:],fig, plot_range, plotType,
-                             alt_hatch=alt_hatch, ylabel=ylabel)
-            fig.canvas.draw()
-    xy_leg = [554742.1172539165,4275228.120412473] # move to main
-    mod = len(leg_args['bars']) / 4
-    if len(leg_args['bars']) % 4 != 0:
-        mod += 1
-#     bb_data = Bbox.from_bounds(xy_leg[0]-boxsize[0]/2., xy_leg[1], 
-#                                boxsize[0], boxsize[1])
-    bb_data = Bbox.from_bounds(xy_leg[0]-boxsize[0]/2., xy_leg  [1], 
-                               boxsize[0]* mod, boxsize[1])
-    disp_coords = ax.transData.transform(bb_data)
-    fig_coords = fig.transFigure.inverted().transform(disp_coords)
-    if alt_hatch:
-        bars=leg_args['bars']*2
-    else:
-        bars=leg_args['bars']
-    plotBarGraph(fig_coords, [plot_range[1]]*len(bars), fig, plot_range, plotType,
-                 legend=True, alt_hatch=alt_hatch, 
-                 xlabels=bars, ylabel=leg_args['ylabel'])
-
-
-    return 
-    
-    
-def plotBarGraph(xys, bar_vals, fig, y_range, plotType, legend=False, alt_hatch=False,
-                 xlabels=[], ylabel=[], labels=[]):
-    # Plots a bar graphs with the given bar names and values at the x,y coordinates of the Delta map.
-    
-    # Colors for bars so they get plotted with the same color order
-#     colors = ['b','g','r','c','m','y','k', '#ff33cc', '#996633'] # max of 9 bars per graph supported
-
-    #Create axes
-    ax = fig.add_axes(Bbox(xys))
-    tot_bar_vals = np.empty(0)
-    tot_labels = np.empty(0)
-    for item in bar_vals:
-        tot_bar_vals = np.append(tot_bar_vals, item)
-    for item in labels:
-        tot_labels = np.append(tot_labels, item)
-    
-    cmap_pars = pylab.cm.get_cmap('spring')
-    colors=[cmap_pars(float(ng)/float(len(tot_bar_vals))) for ng in range(len(tot_bar_vals))]
-    # Plot bars
-    if legend:
-        width = 8.
-    else:
-#         width = 1.
-        width = .7
-
-    ind = np.arange(len(tot_bar_vals))
-    if legend:
-        ind = np.arange(0, len(tot_bar_vals)* 10, 10)
-    bar1 = ax.bar(ind,tot_bar_vals,width)
-    for b,bar in enumerate(bar1):
-        if alt_hatch:
-            bar.set_color(colors[b/2])
-            if b%2 == 1: # hatch pred
-                #bar.set_hatch('xx')
-                bar.set_alpha(0.5)
-        else:
-            bar.set_color(colors[b])
+                xticks = np.arange(len(Labels))
             
-
-    #Format plot
-    ax.set_ylim(y_range[0],y_range[1])
-    ax.patch.set_alpha(0) 
-    ax.set_frame_on(False)
-
-    # annotate
-    ymax = y_range[1]
-#     for nbv,bv in enumerate(tot_bar_vals):
-#         if bv > ymax:
-#             plt.annotate("%.0E"%(bv),[ind[nbv]-0.5,0.65*ymax],rotation=90)
-    
-    if legend:
-        ax.xaxis.set_visible(True)
-        ax.yaxis.set_visible(True)
-        if alt_hatch:
-            xticks = np.arange(0,len(tot_bar_vals),2)+0.5
-        else:
-            xticks = ind
         ax.set_xticks(xticks)
-        ax.set_xticklabels(xlabels,rotation=90,ha='center')
-#         ax.set_yticks(ax.get_yticks()[::2])
-#         ax.set_yticks(ax.get_yticks())
-#         ytick_max = int(y_range[1])/100000*100000
-#         ax.set_yticks([0,ymax])
-#         if plotType == 'Log':
-#             ticks = [0]
-#             tick = 10
-#             while tick < ymax:
-#                 ticks.append(tick)
-#                 tick *= 10
-#             ax.set_yticks(ticks)
-            
-        try:
-            ytick_max = int(y_range[1])/100000*100000
-            ax.set_yticks([0,ytick_max])
-            exponent = np.log10(ytick_max)
-            if exponent - int(exponent) == 0.:
-                ax.set_yticklabels(['0','10$^%d$'%(exponent)])
+        ax.set_xticklabels(Labels,rotation=90,ha='center',fontsize=8)
+        
+        if self.Log:
+            plot_minimum = 1000. if Plot_maximum > 10000 else 1.
+            ax.set_yscale('log')
+            ax.set_ylim(plot_minimum,Plot_maximum)
+            ax.set_yticks([plot_minimum, 10**round(np.mean([np.log10(plot_minimum), np.log10(Plot_maximum)])), Plot_maximum])
+        else:
+            ax.set_yticks([0, Plot_maximum])
+            ax.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
+        ax.set_ylabel(Var)
+        
+    def _configure_Subplot(self, ax, Plot_maximum):
+        '''
+        Makes plots pretty by setting limits and removing axis'
+        '''
 
-        except OverflowError: #if the max is too small, you get an overflow error. then just use the normal number
-            ytick_max = int(y_range[1])
-            ax.set_yticks([0,ytick_max])
-            ax.set_yticklabels(['0','{0}'.format(ytick_max)])
-            exponent = np.log10(ytick_max)
-            if ytick_max == 0:
-                ax.set_yticklabels(['0','0'])
-            else:    
-                if exponent - int(exponent) == 0.:
-                    ax.set_yticklabels(['0','10$^%d$'%(exponent)])
-        ax.set_ylim(y_range[0], ytick_max)
-        ax.set_ylabel(ylabel)
-    else:
-        ax.xaxis.set_visible(False)
-        ax.yaxis.set_visible(False)
-#         ax.spines['right'].set_visible(False)
-#         ax.spines['top'].set_visible(False)
-#         ax.spines['left'].set_visible(False)
-#         plt.tick_params(
-#             axis='both',          # changes apply to the x-axis
-#             which='both',      # both major and minor ticks are affected
-#             bottom=False,      # ticks along the bottom edge are off
-#             top=False,
-#             left=False,         # ticks along the edge are off
-#             labelbottom=False,
-#             labelleft=False,
-#             labeltop=False) # labels along the bottom edge are off
-#         ax.set_ylabel(ylabel,rotation=90)
-#     if plotType == 'Log':
-# #         ax.set_yscale("log", nonposy='clip')
-#         plt.yscale('log')
-    if len(tot_labels) > 0:
-        rects = ax.patches
-        for rect, label in zip(rects, tot_labels):
-            height = rect.get_height()
-            if len(tot_labels) > 10:
-                ax.text(rect.get_x() + rect.get_width() / 2, height, label,
-                        ha='center', va='bottom', color='red', fontsize=5)
+        ax.patch.set_alpha(0) 
+
+        if self.plotType == 'bar':
+            ax.set_frame_on(False)
+            ax.xaxis.set_visible(False)
+            ax.yaxis.set_visible(False)
+        else:
+            ax.spines['right'].set_visible(False)
+            ax.spines['top'].set_visible(False)
+            ax.spines['left'].set_visible(False)
+            ax.set_yticklabels([])
+            plt.tick_params(
+                axis='both',          # changes apply to the x-axis
+                which='both',      # both major and minor ticks are affected
+                bottom=False,      # ticks along the bottom edge are off
+                top=False,
+                left=False,         # ticks along the edge are off
+                labelbottom=False,
+                labelleft=False,
+                labeltop=False) # labels along the bottom edge are off
+            
+        if self.Log:
+            plot_minimum = 1000. if Plot_maximum > 10000 else 1.
+            ax.set_ylim(plot_minimum,Plot_maximum)
+            ax.set_yscale('log')
+        else:
+            ax.set_ylim(0,Plot_maximum)
+        
+    def _add_Legend_Subplot(self, ax, data):
+        '''
+        Adds the Legend subplot and arranges the data.
+        '''
+        
+        cmap_pars = pylab.cm.get_cmap('spring')
+        colors=[cmap_pars(float(ng)/float(len(data))) for ng in range(len(data))]
+        
+        
+        leg_data = np.asarray(data)
+        
+        if self.plotType == 'bar':
+            data_pos = np.arange(0, len(data)* 10, 10)
+            bar1 = ax.bar(data_pos, leg_data, width=8)
+            for b, bar in enumerate(bar1):
+                bar.set_color(colors[b])
+        elif self.plotType == 'boxwhisker':
+            widths = [.5] * len(leg_data)
+
+            if self.compare:
+                data_pos = list(np.arange(0, len(leg_data)*1.5))
+                del data_pos[2::3]
             else:
-                ax.text(rect.get_x() + rect.get_width() / 2, height, label,
-                        ha='center', va='bottom', color='red', fontsize=7)
+                data_pos = np.arange(len(leg_data))
+                
+            box1 = ax.bxp(leg_data, positions=data_pos, widths=widths, showfliers=False, patch_artist=True)
+            if self.compare:
+                for pn, patch in enumerate(box1['boxes']):
+                    if pn % 2 == 0:
+                        patch.set(facecolor='orange', edgecolor='orange') 
+                        plt.setp(box1['whiskers'][pn*2], color='orange') #Note, each whisker is its own entity
+                        plt.setp(box1['whiskers'][pn*2+1], color='orange')
+                        plt.setp(box1['medians'][pn], color='black') 
+                    else:
+                        patch.set(facecolor='green', edgecolor='green') 
+                        plt.setp(box1['whiskers'][pn*2], color='green') #Note, each whisker is its own entity
+                        plt.setp(box1['whiskers'][pn*2+1], color='green')
+                        plt.setp(box1['medians'][pn], color='black') 
+            else:
+                for pn, patch in enumerate(box1['boxes']): #colors each survey its own color from the color scale
+                    patch.set(facecolor=colors[pn], edgecolor=colors[pn]) 
+                    plt.setp(box1['whiskers'][pn*2], color=colors[pn]) #Note, each whisker is its own entity
+                    plt.setp(box1['whiskers'][pn*2+1], color=colors[pn])
+                    plt.setp(box1['medians'][pn], color='black')
+                
+
+    def _add_Legend(self, fig, ax, boxsize, DataFrame, Var, Plot_maximum):
+        '''
+        Creates the Legend plot with dummy data using the plot max.
+        Legend plots have a modified box size to make them longer in the event
+        that there are many surveys, otherwise the labels get crowded.
+        Legend then configured after to be pretty.
+        '''
+        
+        Surveys = self._get_Unique_Surveys(DataFrame)
+        plot_Legend_labels = self._get_Plot_Legend_labels(Surveys)
+        
+        mod = self._get_Legend_size_Modifier(DataFrame, Var)
+        
+        fig_coords = self._get_Fig_Coordinates(fig, ax, self.xy_leg, boxsize, mod=mod)
+        axb = fig.add_axes(Bbox(fig_coords))
+        
+        legend_data = self._make_Legend_Data(len(plot_Legend_labels), Plot_maximum)
+        
+        self._add_Legend_Subplot(axb, legend_data)
+        
+        self._configure_Legend(axb, Plot_maximum, plot_Legend_labels, Var)
+
+    def _add_StartDate_Text(self, ax):
+        '''
+        Adds a small line of text to the plot stating that values are removed before a date
+        if startDate capabilities are utilized
+        '''
+        if self.startDate > dt.datetime(1900,1,1):
+            xloc = ax.get_xlim()[0] + ((ax.get_xlim()[1] - ax.get_xlim()[0]) * .65) 
+            yloc = ax.get_ylim()[0] + ((ax.get_ylim()[1] - ax.get_ylim()[0]) * .05) 
+                
+            ax.text(xloc, yloc, '*Values before {0} removed.'.format(self.startDate.strftime('%m-%d-%Y')), size=6)
+
+    def _add_GrowthText(self, ax, GrowthRate):
+        '''
+        Adds text on plot showing the amount of growth per day that was specified.
+        '''
+        if GrowthRate > 0:
+            xloc = ax.get_xlim()[0] + ((ax.get_xlim()[1] - ax.get_xlim()[0]) * .65) 
+            yloc = ax.get_ylim()[0] + ((ax.get_ylim()[1] - ax.get_ylim()[0]) * .1) 
+                
+            ax.text(xloc, yloc, 'Growth Rate = {0} mm/Day'.format(GrowthRate))
+        
+    def _add_Subplot(self, ax, DataFrame, Var, Plot_maximum, labels=[]):
+        '''
+        Adds Subplot for specified region to the plot window.
+        Gets colors for data, then formats data and plots it.
+        Then colors data to the colormap specified.
+        Then adds red 'x' labels for missing data.
+        Subplot is then configured to look pretty.
+        '''
+        cmap_pars = pylab.cm.get_cmap('spring')
+        colors=[cmap_pars(float(ng)/float(len(DataFrame['Survey']))) for ng in range(len(DataFrame['Survey']))]
+        
+        plt_pos = np.arange(len(DataFrame))
+        
+        
+        if self.plotType == 'bar':
+            plt_data = self._formatPlotData(DataFrame, Var=Var)
+            bar1 = ax.bar(plt_pos, plt_data, width=.7)
+            for b, bar in enumerate(bar1):
+                bar.set_color(colors[b])
+                
+        elif self.plotType == 'boxwhisker':
+            plt_data = self._formatPlotData(DataFrame)
+            if not self.compare:
+                box1 = ax.bxp(plt_data, showfliers=False, patch_artist=True)
+                for pn, patch in enumerate(box1['boxes']): #colors each survey its own color from the color scale
+                    patch.set(facecolor=colors[pn], edgecolor=colors[pn]) 
+                    plt.setp(box1['whiskers'][pn*2], color=colors[pn]) #Note, each whisker is its own entity
+                    plt.setp(box1['whiskers'][pn*2+1], color=colors[pn])
+                    plt.setp(box1['medians'][pn], color='black')
+            else:
+                bw_pos = list(np.arange(0, len(DataFrame)*1.5))
+                del bw_pos[2::3]
+                box1 = ax.bxp(plt_data, positions=bw_pos, showfliers=False, patch_artist=True)
+                for pn, patch in enumerate(box1['boxes']):
+                    if pn % 2 == 0:
+                        patch.set(facecolor='orange', edgecolor='orange') 
+                        plt.setp(box1['whiskers'][pn*2], color='orange') #Note, each whisker is its own entity
+                        plt.setp(box1['whiskers'][pn*2+1], color='orange')
+                        plt.setp(box1['medians'][pn], color='black') 
+                    else:
+                        patch.set(facecolor='green', edgecolor='green') 
+                        plt.setp(box1['whiskers'][pn*2], color='green') #Note, each whisker is its own entity
+                        plt.setp(box1['whiskers'][pn*2+1], color='green')
+                        plt.setp(box1['medians'][pn], color='black') 
+        
+        self._configure_Subplot(ax, Plot_maximum)
+        
+        if len(labels) > 0:
+            if self.plotType == 'bar':
+                rects = ax.patches
+                for rect, label in zip(rects, labels):
+                    ylims = plt.ylim()
+                    height = ylims[0] * 1.005
+                    if len(labels) > 10:
+                        ax.text(rect.get_x() + rect.get_width() / 2, height, label,
+                                ha='center', va='bottom', color='red', fontsize=5)
+                    else:
+                        ax.text(rect.get_x() + rect.get_width() / 2, height, label,
+                                ha='center', va='bottom', color='red', fontsize=7)
+            
+                        
+            elif self.plotType == 'boxwhisker':
+                numBoxes = len(plt_data)
+                if not self.compare:
+                    pos = np.arange(numBoxes) + 1
+                else:
+                    pos = list(np.arange(0, numBoxes*1.5))
+                    del pos[2::3]
+                ylims = plt.ylim()
+                if len(labels) > 10:
+                    for tick, label in zip(range(numBoxes), labels):
+                        ax.text(pos[tick], ylims[0] * 1.005, label, ha='center', va='bottom', color='red', fontsize=5)
+                else:
+                    for tick, label in zip(range(numBoxes), labels):
+                        ax.text(pos[tick], ylims[0] * 1.005, label, ha='center', va='bottom', color='red', fontsize=7)
+                    
         
     
+    
+    def _formatPlotData(self, data, Var=None):
+        '''
+        Gets Data for one region for the appropriate variable into a numpy array for plotting.
+        Log data is set to 1 if lower than 1. Less than 1 values cause negative values when
+        plotted on a log scale.
+        '''
+        if self.plotType == 'boxwhisker':
+            formatted_data = []
+            i = 0
+            for index, datacol in data.iterrows():
+                formatted_data.append({})
+                if self.Log:
+                    formatted_data[i]['med'] = datacol['q50'] if datacol['q50'] >= 1 else 1
+                    formatted_data[i]['q1'] = datacol['q25'] if datacol['q25'] >= 1 else 1
+                    formatted_data[i]['q3'] = datacol['q75'] if datacol['q75'] >= 1 else 1
+                    formatted_data[i]['whislo'] = datacol['q5'] if datacol['q5'] >= 1 else 1
+                    formatted_data[i]['whishi'] = datacol['q95'] if datacol['q95'] >= 1 else 1
+                else:
+                    formatted_data[i]['med'] = datacol['q50']
+                    formatted_data[i]['q1'] = datacol['q25']
+                    formatted_data[i]['q3'] = datacol['q75']
+                    formatted_data[i]['whislo'] = datacol['q5']
+                    formatted_data[i]['whishi'] = datacol['q95']
+                i += 1
+                
+            
+            
+        elif self.plotType == 'bar':
+            formatted_data = np.asarray(data[Var])
+            if self.Log:
+                for i, data in enumerate(formatted_data):
+                    if data < 1:
+                        formatted_data[i] = 1.
+                        
+        return formatted_data
+                     
+    
+    def _findSiteLoc(self, sitename):
+        '''
+        Gets the coordinates for each region name
+        '''
+        return self.utm_dict[sitename]
+    
+    
+
+    
+    def _configure_Plot(self, fig, ax, Var):
+        '''
+        Takes an existing Plot object and makes it pretty. 
+        Adds title, sets extents, and removes axis.
+        '''
+        ax.set_xlim(self.xylims[0],self.xylims[1])
+        ax.set_ylim(self.xylims[2],self.xylims[3])
+        ax.set_aspect('equal', adjustable='box-forced')
+        ax.xaxis.set_visible(False)
+        ax.yaxis.set_visible(False)
+        title = 'Longfin Smelt {0}mm to {1}mm'.format(self.Sizes[0], self.Sizes[1])
+        if self.compare:
+            title += ' Pred Vs Obs Cohort {0}'.format(self.Cohort_Number)
+        if self.Chronological:
+            title += ' Chronological'
+        title += ' {0} {1}'.format(Var, self.Year)
+        plt.title(title)
+        
+    def _create_Plot(self, Var):
+        '''
+        Creates the plot object frame. Includes adding the Water grids plot.
+        Then configures the plot to remove borders, coords, etc etc
+        '''
+        fig = plt.figure(figsize=[10,10])
+        ax = fig.add_subplot(111)
+        self._draw_water_and_polys(fig, ax, self.xylims)
+        self._configure_Plot(fig, ax, Var)
+        return ax, fig
+        
+
+    def savePlot(self, Var):
+        '''
+        Sets up a plot name depending on variables
+        '''
+        if not os.path.exists(r'..\Plots'):
+            os.mkdir(r'..\Plots')
+        filename = '{0}_{1}_Size_{2}mm-{3}mm_{4}'.format(self.Year, self.plotType, self.Sizes[0], self.Sizes[1], Var)
+        if self.compare:
+            filename += '_PredVsObs_Cohort{0}'.format(self.Cohort_Number)
+        if self.Chronological:
+            filename += '_Chronological'
+        if self.Log:
+            filename += '_Log'
+        filename = '..\Plots\{0}.png'.format(filename)
+        plt.savefig(filename, dpi=900, facecolor='white',bbox_inches='tight')
+        plt.close()
+        plt.clf()
+        
+   
+    def plot_bars(self, dataFrame, Var, GrowthRate, Chronological, Log, startDate):
+        '''
+        Adds subplots for each specified region and adds a new subplot for the data.
+        Takes in organized Pandas dataFrame grabs data based on Var.
+        If Chronological, organizes data based on sample date.
+        '''
+        self.plotType = 'bar'
+        self.startDate = startDate
+        self.Log = Log
+        self.Chronological = Chronological
+        boxsize = [10000.,10000.] #Check this
+        
+        ax, fig = self._create_Plot(Var)
+
+        
+        
+        Plot_maximum = self._get_Plot_Scale(dataFrame, Var)
+        
+        if self.Chronological:
+            dataFrame = dataFrame.sort_values(['Region', 'PlotOrder', 'Survey'])
+        else:
+            dataFrame = dataFrame.sort_values(['LoadOrder','Region', 'Survey'])
+        
+        for region in self.plot_poly_dict.keys():
+
+            region_data = dataFrame.query('Region=="{0}"'.format(region))
+
+            labels = self._get_Plot_Labels(region_data)
+            
+            fig_coords = self._get_Fig_Coordinates(fig, ax, self._findSiteLoc(region), boxsize)
+            axb = fig.add_axes(Bbox(fig_coords))
+            
+            
+            self._add_Subplot(axb, region_data, Var, Plot_maximum, labels=labels)
+            fig.show()
+            fig.canvas.draw()
+            
+        self._add_Legend(fig, ax, boxsize, region_data, Var, Plot_maximum)
+        self._add_GrowthText(ax, GrowthRate)
+        self._add_StartDate_Text(ax)
+        
+    def plot_boxwhisker(self, dataFrame, Var, Chronological, Log):
+        '''
+        Adds subplots for each specified region and adds a new subplot for the data.
+        Takes in organized Pandas dataFrame grabs data based on Var.
+        If Chronological, organizes data based on sample date.
+        '''
+        self.plotType = 'boxwhisker'
+        self.Log = Log
+        self.Chronological = Chronological
+        boxsize = [10000.,10000.] #Check this
+        
+        ax, fig = self._create_Plot(Var)
+        
+        Plot_maximum = self._get_Plot_Scale(dataFrame, Var)
+        
+        if Chronological:
+            dataFrame = dataFrame.sort_values(['Region', 'PlotOrder', 'Survey'])
+        else:
+            dataFrame = dataFrame.sort_values(['LoadOrder', 'Region', 'Survey'])
+        
+        for region in self.plot_poly_dict.keys():
+
+            region_data = dataFrame.query('Region=="{0}"'.format(region))
+
+            labels = self._get_Plot_Labels(region_data)
+            
+            fig_coords = self._get_Fig_Coordinates(fig, ax, self._findSiteLoc(region), boxsize)
+            axb = fig.add_axes(Bbox(fig_coords))
+            
+            
+            self._add_Subplot(axb, region_data, Var, Plot_maximum, labels=labels)
+            fig.show()
+            fig.canvas.draw()
+            
+        self._add_Legend(fig, ax, boxsize, region_data, Var, Plot_maximum)
+        
+    def plot_ObsVsPred_Boxwhisker(self, dataFrame, Var, Chronological, Cohort_Number, Log):
+        '''
+        Adds subplots for each specified region and adds a new subplot for the data.
+        Takes in organized Pandas dataFrame grabs data based on Var.
+        [TODO] If Chronological, organizes data based on sample date.
+        '''
+        self.compare = True
+        self.Log = Log
+        self.plotType = 'boxwhisker'
+        self.Chronological = Chronological
+        self.Cohort_Number = Cohort_Number
+        boxsize = [10000.,10000.] #Check this
+        
+        ax, fig = self._create_Plot(Var)
+        
+        Plot_maximum = self._get_Plot_Scale(dataFrame, Var)
+        
+#         if Chronological:
+#             dataFrame = dataFrame.sort_values(['Region', 'PlotOrder', 'Survey'])
+#         else:
+#             dataFrame = dataFrame.sort_values(['LoadOrder', 'Region', 'Survey'])
+        dataFrame = dataFrame.sort_values(['Region', 'Survey'])
+
+        
+        for region in self.plot_poly_dict.keys():
+
+            region_data = dataFrame.query('Region=="{0}"'.format(region))
+
+            labels = self._get_Plot_Labels(region_data)
+            
+            fig_coords = self._get_Fig_Coordinates(fig, ax, self._findSiteLoc(region), boxsize)
+            axb = fig.add_axes(Bbox(fig_coords))
+            
+            
+            self._add_Subplot(axb, region_data, Var, Plot_maximum, labels=labels)
+            fig.show()
+            fig.canvas.draw()
+            
+        self._add_Legend(fig, ax, boxsize, region_data, Var, Plot_maximum)
+
+        
+        
+        
+        
+        
