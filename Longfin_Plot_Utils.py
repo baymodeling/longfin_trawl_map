@@ -10,7 +10,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.transforms import Bbox
 import pylab
-import pandas as pd
 import datetime as dt
 
 class LongfinMap(object):
@@ -52,7 +51,7 @@ class LongfinMap(object):
         '''
         # inputs used across all CAMT cases
         self.xylims = [530000,661500,4138000,4295000]
-        shp = r"..\Longfin_hatching_regions.shp"
+        shp = r"Longfin_hatching_regions.shp"
         dict_field_name = 'Region'
         inpfile = 'FISH_PTM.inp'
         
@@ -120,10 +119,10 @@ class LongfinMap(object):
         i = 0
         for index, row in Filtered_DataFrame.iterrows():
             if self.plotType == 'bar':
-                if row['Abundance'] > 0.0 and row['Density'] > 0.0:
+                if row['Abundance'] >= 0.0 and row['Density'] >= 0.0:
                     labels[i] = ''
             elif self.plotType == 'boxwhisker':
-                if row['q5'] > 0.0:
+                if row['q5'] >= 0.0:
                     labels[i] = ''
             i += 1
         return labels
@@ -586,8 +585,8 @@ class LongfinMap(object):
         '''
         Sets up a plot name depending on variables
         '''
-        if not os.path.exists(r'..\Plots'):
-            os.mkdir(r'..\Plots')
+        if not os.path.exists(r'Plots'):
+            os.mkdir(r'Plots')
         filename = '{0}_{1}_Size_{2}mm-{3}mm_{4}'.format(self.Year, self.plotType, self.Sizes[0], self.Sizes[1], Var)
         if self.compare:
             filename += '_PredVsObs_Cohort{0}'.format(self.Cohort_Number)
@@ -595,7 +594,7 @@ class LongfinMap(object):
             filename += '_Chronological'
         if self.Log:
             filename += '_Log'
-        filename = '..\Plots\{0}.png'.format(filename)
+        filename = 'Plots\{0}.png'.format(filename)
         plt.savefig(filename, dpi=900, facecolor='white',bbox_inches='tight')
         plt.close()
         plt.clf()

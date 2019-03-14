@@ -3,20 +3,10 @@ Created on Feb 14, 2019
 
 @author: scott
 '''
-import os, sys
-import csv
-import numpy as np
-from scipy import stats
-import pandas as pd
-import pylab
-import matplotlib.pyplot as plt
-import pdb
+import os
 import datetime  as dt
-import math
-from stompy.grid import unstructured_grid
-from rmapy.utils.gis import polygons_w_attributes_from_shp as polys_from_shp
-from Longfin_Plotter_DataManager import DataManager
 from Longfin_Plot_Utils import LongfinMap
+from Longfin_Plotter_DataManager import DataManager
 
 
 ###########################################################################
@@ -195,8 +185,8 @@ if __name__ == '__main__':
     grd_file = os.path.join(run_dir, 'ptm.grd')
     year = 2013
     bar = True
-    box = True
-    pvo_boxw = True
+    box = False
+    pvo_boxw = False
     
     
     if bar:

@@ -4,8 +4,6 @@ Created on Feb 14, 2019
 @author: scott
 '''
 
-from stompy.grid import unstructured_grid
-from rmapy.utils.gis import polygons_w_attributes_from_shp as polys_from_shp
 import os, sys
 import pandas as pd
 import numpy as np
@@ -200,10 +198,11 @@ class DataManager(object):
             Survey_Count = self._get_Fish_Size_Counts(valid_idx, Sizes)
             Survey_Volume = self._get_Fish_Volumes(valid_idx)
             if len(valid_idx) == 0:
-                return 0.0, 0.0, StartDate
+                return -1., -1., StartDate
             Region_Density = Survey_Count / Survey_Volume
             static_vol = self.static_volumes[Region]
-            Region_Abundance = np.nan_to_num(Region_Density * static_vol)
+#             Region_Abundance = np.nan_to_num(Region_Density * static_vol)
+            Region_Abundance = Region_Density * static_vol
             
             return Region_Abundance, Region_Density, StartDate
         
@@ -217,7 +216,7 @@ class DataManager(object):
                     sys.exit(0)
                 elif len(Survey_Idx) == 0:
                     print 'No data found for {0} {1}'.format(Region, Survey)
-                    return 0.,0.,0.,0.,0.
+                    return -1.,-1.,-1.,-1.,-1.
                 Survey_Idx = Survey_Idx[0]
                 q5,q25,q50,q75,q95 = self._get_BoxWhisker_Stats(Survey_Idx)
                 return q5,q25,q50,q75,q95
@@ -243,14 +242,14 @@ class DataManager(object):
         
     def _get_BoxWhisker_Stats(self, idx):
         '''
-        Sorts and grabs boxwhisker stats from file. If the data is null, use 0 instead.
+        Sorts and grabs boxwhisker stats from file.
         '''
         
-        q5 = self.Trawl_Data['q5'][idx] if not pd.isnull(self.Trawl_Data['q5'][idx]) else 0.
-        q25 = self.Trawl_Data['q25'][idx] if not pd.isnull(self.Trawl_Data['q25'][idx]) else 0.
-        q50 = self.Trawl_Data['q50'][idx] if not pd.isnull(self.Trawl_Data['q50'][idx]) else 0.
-        q75 = self.Trawl_Data['q75'][idx] if not pd.isnull(self.Trawl_Data['q75'][idx]) else 0.
-        q95 = self.Trawl_Data['q95'][idx] if not pd.isnull(self.Trawl_Data['q95'][idx]) else 0.
+        q5 = self.Trawl_Data['q5'][idx] 
+        q25 = self.Trawl_Data['q25'][idx] 
+        q50 = self.Trawl_Data['q50'][idx] 
+        q75 = self.Trawl_Data['q75'][idx] 
+        q95 = self.Trawl_Data['q95'][idx]
         
         return q5,q25,q50,q75,q95
         
@@ -438,6 +437,42 @@ class DataManager(object):
                 Source_ID[src] = unknown_ID
                 
         return dataframe
+   
+    def _get_Survey_Dates(self, dataFrame, Survey):
+        '''
+        Gets dates for all trawls for a specific survey, region agnostic. Allows user to get a range of dates
+        that a survey may be in in the event that the Trawl data is incomplete.
+        Used mostly to get correct data for Predicted data.
+        '''
+        survey_dates = []
+        for index, row in dataFrame.iterrows():
+            if row['Survey'] == Survey:
+                if row['StartDate'].year == self.Year and row['EndDate'].year == self.Year:
+                    survey_dates.append(row['StartDate'])
+                    survey_dates.append(row['EndDate'])
+                    
+        startDate = min(survey_dates)
+        endDate = max(survey_dates)
+        
+        return startDate, endDate
+    
+    def _get_boxwhisker_Date_values(self, StartDate, EndDate, update_idx):
+        '''
+        Extracts quantile data from the mainDataFrame for specific dates
+        '''
+        q5 = []
+        q25 = []
+        q50 = []
+        q75 = []
+        q95 = []
+        for idx in update_idx:
+            if StartDate <= self.mainDataFrame['Day'][idx] <= EndDate:
+                q5.append(self.mainDataFrame['q5'][idx])
+                q25.append(self.mainDataFrame['q25'][idx])
+                q50.append(self.mainDataFrame['q50'][idx])
+                q75.append(self.mainDataFrame['q75'][idx])
+                q95.append(self.mainDataFrame['q95'][idx])
+        return q5, q25, q50, q75, q95
     
     def apply_Chronological(self, Chronological, Chronological_data=[]):
         '''
@@ -588,18 +623,10 @@ class DataManager(object):
             update_idx = [r for r, DFrow in self.mainDataFrame.iterrows() if DFrow['Region'] == row['Region']]
             StartDate = row['StartDate']
             EndDate = row['EndDate']
-            q5 = []
-            q25 = []
-            q50 = []
-            q75 = []
-            q95 = []
-            for idx in update_idx:
-                if StartDate <= self.mainDataFrame['Day'][idx] <= EndDate:
-                    q5.append(self.mainDataFrame['q5'][idx])
-                    q25.append(self.mainDataFrame['q25'][idx])
-                    q50.append(self.mainDataFrame['q50'][idx])
-                    q75.append(self.mainDataFrame['q75'][idx])
-                    q95.append(self.mainDataFrame['q95'][idx])
+            if StartDate > EndDate:
+                StartDate, EndDate = self._get_Survey_Dates(Observed_Data, row['Survey'])
+            q5, q25, q50, q75, q95 = self._get_boxwhisker_Date_values(StartDate, EndDate, update_idx)
+                   
             Avg_Pred_Df = Avg_Pred_Df.append({'Region': row['Region'],
                                               'Survey': row['Survey'],
                                               'Source': 'Computed',
@@ -627,6 +654,7 @@ class DataManager(object):
         
         for survey_index in valid_idx:
             current_date = dt.datetime.strptime(self.Trawl_Data[dateheader].values[survey_index], '%m/%d/%Y %H:%M')
+            print current_date
             if current_date < Earliest_Survey_Date:
                 Earliest_Survey_Date = current_date
                     
