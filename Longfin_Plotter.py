@@ -174,6 +174,51 @@ class LongfinPlotter(object):
             self.Map_Utils.savePlot(Var)
 
 
+    def make_TotalPredvsObs_BoxWhisker(self,
+                              Predicted_Data_Dir,
+                              Pred_data_list,
+                              Obs_data,
+                              Chronological_data,
+                              Var,
+                              Chronological=False,
+                              Log=False):
+        '''
+        Creates boxwhisker plots for properly set up data. Instead of coming from trawl observed data,
+        data is post processed into csv files containing the q5, q25, q50, q75, and q95 (q meaning quantile)
+        statistics. These values are used for creating boxwhisker plots.
+        q5 = 5% quantile, bottom whisker
+        q25 = 25% quantile, bottom of the box
+        q50 = 50% quantile, middle of the box
+        q75 = 75% quantile, top of the box
+        q95 = 95% quantile, top whisker
+        
+        The Data acts as a direct comparison of Observed data from collected surveys to computed values.
+        
+        
+        variable controls including chronological and Log scaling. If Chronological, user must include a pairing trawl csv file that contains
+        dates for each survey and region.
+        
+        Inputs:
+        Trawl_Data: pre processed csv file full path containing data.
+        Var: plot type variable. Abundance or Density
+        Chronological: Boolean to turn on Chronological plotting.
+                       If True, bars are ordered by the survey date, not the load order
+        Chronological_data: list set of data to correspond with the trawl data. Only needed if Chronological is passed in as True
+        Log: Plots data with a log scale instead of a true scale. Can make data with a large variation easier to view. 
+        '''
+        Obs_data_Manager = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, self.Surveys, 'Boxwhisker', '')
+        Obs_data_Manager.InitializeData(Obs_data)
+        Obs_data_Manager.get_Dates(Chronological_data)
+        Pred_data_Manager = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, self.Surveys, 'Boxwhisker', '')
+        for i, Pred_data in enumerate(Pred_data_list):
+            Pred_data_file = os.path.join(Predicted_Data_Dir, Pred_data)
+            Pred_data_Manager.InitializeData(Pred_data_file, predicted=True)
+            
+        Obs_data = Obs_data_Manager.get_DataFrame()
+        Avg_Pred_Data = Pred_data_Manager.get_Predicted_Timed_Data(Obs_data, Total=True)
+        dataframe = Pred_data_Manager.merge_Dataframes(Avg_Pred_Data, Obs_data)
+        self.Map_Utils.plot_ObsVsPred_Boxwhisker(dataframe, Var, Chronological, 'Total', Log)
+        self.Map_Utils.savePlot(Var)
 
 
 
@@ -184,9 +229,10 @@ if __name__ == '__main__':
     run_dir = r'J:\Longfin\bar_plots\FISH_PTM'
     grd_file = os.path.join(run_dir, 'ptm.grd')
     year = 2013
-    bar = True
+    bar = False
     box = False
     pvo_boxw = False
+    pvo_boxw_Total = True
     
     
     if bar:
@@ -236,6 +282,25 @@ if __name__ == '__main__':
         lfp = LongfinPlotter(run_dir, grd_file, year, sizes, surveys)
          
         lfp.make_PredvsObs_BoxWhisker(Obs_data_dir, Pred_data_dir, Obs_data, Pred_data, Chron_data, Var, Log=True)
+
+    if pvo_boxw_Total:
+        Var = 'Abundance'
+        Pred_data_dir = r"C:\git\longfin_trawl_map\hatching_fit_multiple_cohorts"
+        
+        Pred_data = ["quantiles_1.csv",
+                     "quantiles_2.csv",
+                     "quantiles_3.csv",
+                     "quantiles_4.csv",
+                     "quantiles_5.csv",
+                     "quantiles_6.csv"]
+        Obs_data = r"C:\git\longfin_trawl_map\Total_abun\SLS_quantiles_3mm-11mm_2013.csv"
+        Chron_data = [r"J:\Longfin\bar_plots\SLS_trawl_summary.csv"]
+        sizes = [3,11]
+        surveys = [1,2,3,4,5,6]
+         
+        lfp = LongfinPlotter(run_dir, grd_file, year, sizes, surveys)
+         
+        lfp.make_TotalPredvsObs_BoxWhisker(Pred_data_dir, Pred_data, Obs_data, Chron_data, Var, Log=True)
     
     
     

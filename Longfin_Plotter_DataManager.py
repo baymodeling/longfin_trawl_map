@@ -223,7 +223,7 @@ class DataManager(object):
             
             else:
                 valid_headers = [n for n in self.Trawl_Data.columns.values if Region in n]
-                region_df = pd.DataFrame(columns={'Region', 'q5', 'q25', 'q50', 'q75', 'q95', 'Day'})
+                region_df = pd.DataFrame(columns={'Region', 'q5', 'q25', 'q50', 'q75', 'q95', 'Day', 'Source'})
                 
                 for index, row in self.Trawl_Data.iterrows():
                     date_string = dt.datetime(1970,1,1) + dt.timedelta(days=int(row['date_string']))
@@ -328,6 +328,33 @@ class DataManager(object):
                 counted_Surveys.append(SurvSource)
                 
         return counted_Surveys
+    
+    def _get_Correct_Pred_Sources(self, Survey, Pred_List):
+        '''
+        Grabs the list of predicted data and organzies them based on Survey number for Total Cohort plots.
+        Survey 3 uses quantiles, 1, 2 and 3, Survey 5 uses 1,2,3,4,5, etc...
+        HEAVILY depends on pred data named quantiles_x
+        '''
+        new_pred_list = []
+        for Pred_source in Pred_List:
+            try:
+                if float(Pred_source.split('_')[1]) <= Survey:
+                    new_pred_list.append(Pred_source)
+            except:
+                print 'Unknown file name for predicted data:', Pred_source
+                checkadd = raw_input('Include {0} for Survey {1}? (Y/N)'.format(Pred_source, Survey)) 
+                while checkadd.lower() not in ['y', 'n']:
+                    print 'Input {0} not understood. Please use Y or N to respond.'.format(checkadd)
+                    checkadd = raw_input('Include {0} for Survey {1}? (Y/N)'.format(Pred_source, Survey)) 
+                if checkadd.lower() == 'y':
+                    print 'Using {0} for Survey {1}'.format(Pred_source, Survey)
+                    new_pred_list.append(Pred_source)
+                elif checkadd.lower() == 'n':
+                    print 'Not using {0} for Survey {1}'.format(Pred_source, Survey)
+                else:
+                    print 'You should never be here. Begone.'
+                    
+        return new_pred_list
     
     def _get_Survey_Order(self, dataframe):
         '''
@@ -526,8 +553,9 @@ class DataManager(object):
             for region in self.regions:
                 if self.plottype == 'boxwhisker':
                     region_df = self._get_Region_Stats(region, 0, predicted=predicted)
+                    region_df['Source'] = os.path.basename(Trawl_Data).split('.')[0]
                     self._merge_with_mainDataFrame(region_df)
-            self.mainDataFrame = self.mainDataFrame.reset_index()
+            self.mainDataFrame = self.mainDataFrame.reset_index(drop=True)
                                                    
 
     def InitializeData(self, Trawl_Data, predicted=False):
@@ -611,31 +639,59 @@ class DataManager(object):
         DataFrame = self._connect_Sources(DataFrame)
         self._add_Dates(DataFrame)
             
-    def get_Predicted_Timed_Data(self, Observed_Data):   
+    def get_Predicted_Timed_Data(self, Observed_Data, Total=False):   
         '''
         Gets the correct predicted time series data from Computed data excel files. 
         Observed forms give daily values for q5, q25, q50, q75, and q95 regional values.
         By using an observed trawl data file, dates for each region and survey are grabbed.
         Values from the computed file are then averaged over the selected days and returned in a dataframe.
+        
+        If Total flag is true, Values for each survey are computed by iterating through each 
+        observed file. A date for each survey trawl is found. Then each quantiles file before the
         '''  
         Avg_Pred_Df = pd.DataFrame(columns=['Region', 'Survey', 'Source', 'q5', 'q25', 'q50', 'q75', 'q95'])
         for index, row in Observed_Data.iterrows():
-            update_idx = [r for r, DFrow in self.mainDataFrame.iterrows() if DFrow['Region'] == row['Region']]
             StartDate = row['StartDate']
             EndDate = row['EndDate']
             if StartDate > EndDate:
                 StartDate, EndDate = self._get_Survey_Dates(Observed_Data, row['Survey'])
-            q5, q25, q50, q75, q95 = self._get_boxwhisker_Date_values(StartDate, EndDate, update_idx)
+            if Total:
+                Pred_Source_list = list(set(self.mainDataFrame['Source'].tolist())) #gets unique values for a column. Ugly, but effective
+                Pred_Source_list = self._get_Correct_Pred_Sources(row['Survey'], Pred_Source_list)
+                q5_val = q25_val = q50_val = q75_val = q95_val = 0.
+                for current_Source in Pred_Source_list:
+                    print 'Getting data from', current_Source, 'Survey', row['Survey'], 'in region', row['Region']
+                    update_idx = [r for r, DFrow in self.mainDataFrame.iterrows() if DFrow['Region'] == row['Region'] and DFrow['Source'] == current_Source]
+                    q5, q25, q50, q75, q95 = self._get_boxwhisker_Date_values(StartDate, EndDate, update_idx)
+                    q5_val += np.average(q5) if len(q5) >= 1 else 0.
+                    q25_val += np.average(q25) if len(q25) >= 1 else 0.
+                    q50_val += np.average(q50) if len(q50) >= 1 else 0.
+                    q75_val += np.average(q75) if len(q75) >= 1 else 0.
+                    q95_val += np.average(q95) if len(q95) >= 1 else 0.
+                
+                Avg_Pred_Df = Avg_Pred_Df.append({'Region': row['Region'],
+                                                  'Survey': row['Survey'],
+                                                  'Source': 'Computed',
+                                                  'q5': q5_val,
+                                                  'q25': q25_val,
+                                                  'q50': q50_val,
+                                                  'q75': q75_val,
+                                                  'q95': q95_val},
+                                                  ignore_index=True)
+                
+            else:
+                update_idx = [r for r, DFrow in self.mainDataFrame.iterrows() if DFrow['Region'] == row['Region']]
+                q5, q25, q50, q75, q95 = self._get_boxwhisker_Date_values(StartDate, EndDate, update_idx)
                    
-            Avg_Pred_Df = Avg_Pred_Df.append({'Region': row['Region'],
-                                              'Survey': row['Survey'],
-                                              'Source': 'Computed',
-                                              'q5': np.average(q5) if len(q5) >= 1 else 0.,
-                                              'q25': np.average(q25) if len(q25) >= 1 else 0.,
-                                              'q50': np.average(q50) if len(q50) >= 1 else 0.,
-                                              'q75': np.average(q75) if len(q75) >= 1 else 0.,
-                                              'q95': np.average(q95) if len(q95) >= 1 else 0.},
-                                              ignore_index=True)
+                Avg_Pred_Df = Avg_Pred_Df.append({'Region': row['Region'],
+                                                  'Survey': row['Survey'],
+                                                  'Source': 'Computed',
+                                                  'q5': np.average(q5) if len(q5) >= 1 else 0.,
+                                                  'q25': np.average(q25) if len(q25) >= 1 else 0.,
+                                                  'q50': np.average(q50) if len(q50) >= 1 else 0.,
+                                                  'q75': np.average(q75) if len(q75) >= 1 else 0.,
+                                                  'q95': np.average(q95) if len(q95) >= 1 else 0.},
+                                                  ignore_index=True)
             
         return Avg_Pred_Df
     
