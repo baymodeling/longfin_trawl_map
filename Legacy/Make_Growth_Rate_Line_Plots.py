@@ -8,9 +8,9 @@ from Plot_Series_of_GrowthRates import make_Daily_Growth_Plot
 from Plot_Dated_GrowthRates import make_Single_Day_Growth_Plot
 import datetime as dt
 
-growth_Rates = ['0.14', '0.20', '0.25', '0.3']
-data_dir = r'J:\Longfin\bar_plots\1999'
-output_dir = 'GrowthRate'
+growth_Rates = ['0.15', '0.20', '0.23', '0.25']
+data_dir = r'J:\Longfin\bar_plots\Delta_Smelt\1999'
+output_dir = r'J:\Longfin\bar_plots\Delta_Smelt\1999'
 
 for GR in growth_Rates:
     print GR
