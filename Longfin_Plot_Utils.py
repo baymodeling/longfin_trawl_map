@@ -11,6 +11,7 @@ import numpy as np
 from matplotlib.transforms import Bbox
 import pylab
 import datetime as dt
+from shutil import copyfile
 
 class LongfinMap(object):
     '''
@@ -91,7 +92,8 @@ class LongfinMap(object):
             'Lower_South_SF_Bay':[586049.3904422284,4145683.2290003207], 
             'Napa_Sonoma':[556261.7283191724,4226662.861358802]}
         
-        self.xy_leg = [554742.1172539165,4275228.120412473]
+#         self.xy_leg = [554742.1172539165,4275228.120412473]
+        self.xy_leg = [547799.8896998921,4275000.017826721]
 
         return
     
@@ -144,11 +146,16 @@ class LongfinMap(object):
             len_max = (len(str(max_val).split('.')[0]) - 2) * -1
             scaler = round(max_val, len_max)
             
+        elif self.plotType == 'timeseries':
+            max_val = max(max(DataFrame['Values'].values))
+            len_max = (len(str(max_val).split('.')[0]) - 2) * -1
+            scaler = round(max_val, len_max)
+            
         if self.Log:
             if str(max_val).split('.')[0][:len_max] != 10:
                 num_zero = (len_max * -1) + 1
             scaler = int('10' + '0'*num_zero)
-            
+        
         return scaler
     
 
@@ -160,7 +167,13 @@ class LongfinMap(object):
     
         counted_Surveys = []
         for index, row in DataFrame.iterrows():
-            survey = row['Survey']
+            if self.datatype == 'hatch' or self.datatype == 'entrainment':
+                if self.plotType == 'timeseries':
+                    survey = row['Survey']
+                else:
+                    survey = row['Cohort']
+            elif self.datatype == None or self.datatype == 'cohort':
+                survey = row['Survey']
             source = row['Source']
             SurvSource = (survey, source)
             if SurvSource not in counted_Surveys:
@@ -187,6 +200,8 @@ class LongfinMap(object):
                 plot_Legend.append('20mm {0}'.format(int(survey)))
             elif 'computed' == source.lower():
                 plot_Legend.append('Computed'.format(int(survey)))
+            elif self.datatype == 'hatch' or self.datatype == 'entrainment':
+                plot_Legend.append(int(survey))
             else:
                 if source not in unknown_Sources.keys():
                     print 'Unknown data source {0}'.format(os.path.basename(source))
@@ -221,12 +236,19 @@ class LongfinMap(object):
             data_len = len(DataFrame[Var])
         elif self.plotType == 'boxwhisker':
             data_len = len(DataFrame['q5'])
+        elif self.plotType == 'timeseries':
+            data_len = 5
         if self.compare:
             data_len *= 1.5
         mod = data_len / 4
         if data_len % 4 != 0:
                 mod += 1
         return mod
+    
+    def _getNumdays(self, dataFrame):
+        for idx, row in dataFrame.iterrows():
+            if row['Values'] != None:
+                return len(row['Values'])
     
     def _make_Legend_Data(self, num_Surveys, Plot_Maximum):
         '''
@@ -251,6 +273,10 @@ class LongfinMap(object):
                                         "q3": Plot_Maximum * .75,
                                         "whislo": 0,
                                         "whishi": Plot_Maximum})
+            elif self.plotType == 'timeseries':
+                linescalar = float(Plot_Maximum) / num_Surveys
+                datalevel = linescalar  * (i+1)
+                legend_data.append([datalevel] * self.numdays)
         return legend_data
     
     def _draw_water_and_polys(self, fig, ax, xylims):
@@ -290,9 +316,18 @@ class LongfinMap(object):
                 del xticks[2::3]
             else:
                 xticks = np.arange(len(Labels))
+        else:
+            xticks = np.arange(len(Labels))
+                
+#         elif plotType == 'timeseries':
+            
             
         ax.set_xticks(xticks)
-        ax.set_xticklabels(Labels,rotation=90,ha='center',fontsize=8)
+        if self.datatype in ['hatch', 'entrainment']:
+            ax.set_xticklabels(Labels,ha='center',fontsize=8)
+
+        elif self.datatype in [None, 'cohort']:
+            ax.set_xticklabels(Labels,rotation=90,ha='center',fontsize=8)
         
         if self.Log:
             plot_minimum = 1000. if Plot_maximum > 10000 else 1.
@@ -302,6 +337,9 @@ class LongfinMap(object):
         else:
             ax.set_yticks([0, Plot_maximum])
             ax.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
+        if self.datatype == 'hatch' or self.datatype == 'entrainment':
+            ax.set_xlabel('Cohort')
+            ax.set_ylabel('Larvae')
         ax.set_ylabel(Var)
         
     def _configure_Subplot(self, ax, Plot_maximum):
@@ -315,10 +353,23 @@ class LongfinMap(object):
             ax.set_frame_on(False)
             ax.xaxis.set_visible(False)
             ax.yaxis.set_visible(False)
-        else:
+        elif self.plotType == 'boxwhisker':
             ax.spines['right'].set_visible(False)
             ax.spines['top'].set_visible(False)
             ax.spines['left'].set_visible(False)
+            ax.set_yticklabels([])
+            plt.tick_params(
+                axis='both',          # changes apply to the x-axis
+                which='both',      # both major and minor ticks are affected
+                bottom=False,      # ticks along the bottom edge are off
+                top=False,
+                left=False,         # ticks along the edge are off
+                labelbottom=False,
+                labelleft=False,
+                labeltop=False) # labels along the bottom edge are off
+        elif self.plotType == 'timeseries':
+            ax.spines['right'].set_visible(False)
+            ax.spines['top'].set_visible(False)
             ax.set_yticklabels([])
             plt.tick_params(
                 axis='both',          # changes apply to the x-axis
@@ -336,15 +387,24 @@ class LongfinMap(object):
             ax.set_yscale('log')
         else:
             ax.set_ylim(0,Plot_maximum)
-        
-    def _add_Legend_Subplot(self, ax, data):
+    
+    def _regionCheck(self, data):
+        for item in data:
+            if item != None:
+                return True
+        return False
+
+    def _add_Legend_Subplot(self, ax, data, Var):
         '''
         Adds the Legend subplot and arranges the data.
         '''
-        
-        cmap_pars = pylab.cm.get_cmap('spring')
-        colors=[cmap_pars(float(ng)/float(len(data))) for ng in range(len(data))]
-        
+        if self.datatype == 'hatch' or self.datatype == 'entrainment':
+            cmap_pars = pylab.cm.get_cmap('winter')
+            colors=[cmap_pars(float(ng)/float(len(data))) for ng in range(len(data))]
+        else:
+            cmap_pars = pylab.cm.get_cmap('spring')
+            colors=[cmap_pars(float(ng)/float(len(data))) for ng in range(len(data))]
+    
         
         leg_data = np.asarray(data)
         
@@ -353,6 +413,7 @@ class LongfinMap(object):
             bar1 = ax.bar(data_pos, leg_data, width=8)
             for b, bar in enumerate(bar1):
                 bar.set_color(colors[b])
+                
         elif self.plotType == 'boxwhisker':
             widths = [.5] * len(leg_data)
 
@@ -381,7 +442,16 @@ class LongfinMap(object):
                     plt.setp(box1['whiskers'][pn*2], color=colors[pn]) #Note, each whisker is its own entity
                     plt.setp(box1['whiskers'][pn*2+1], color=colors[pn])
                     plt.setp(box1['medians'][pn], color='black')
+                    
+        elif self.plotType == 'timeseries':
+            for i, dataseries in enumerate(data):
+                leg, = ax.plot(dataseries, color=colors[i], label=(i+1))
                 
+            box = ax.get_position()
+            ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
+            handles, labels = ax.get_legend_handles_labels()
+            ax.legend(handles[::-1], labels[::-1], bbox_to_anchor=(1, 0.5), loc='center left', fontsize=4)
+            
 
     def _add_Legend(self, fig, ax, boxsize, DataFrame, Var, Plot_maximum):
         '''
@@ -401,7 +471,7 @@ class LongfinMap(object):
         
         legend_data = self._make_Legend_Data(len(plot_Legend_labels), Plot_maximum)
         
-        self._add_Legend_Subplot(axb, legend_data)
+        self._add_Legend_Subplot(axb, legend_data, Var)
         
         self._configure_Legend(axb, Plot_maximum, plot_Legend_labels, Var)
 
@@ -434,8 +504,17 @@ class LongfinMap(object):
         Then adds red 'x' labels for missing data.
         Subplot is then configured to look pretty.
         '''
-        cmap_pars = pylab.cm.get_cmap('spring')
-        colors=[cmap_pars(float(ng)/float(len(DataFrame['Survey']))) for ng in range(len(DataFrame['Survey']))]
+        if self.datatype in ['hatch', 'entrainment']:
+            cmap_pars = pylab.cm.get_cmap('winter')
+            colors=[cmap_pars(float(ng)/float(len(DataFrame['Survey']))) for ng in range(len(DataFrame['Survey']))]
+        elif self.datatype in ['multipredicted']:
+            cmap_pars = pylab.cm.get_cmap('winter')
+            num_dataset_sources = len(list(set(DataFrame['Source'].tolist())))
+            print num_dataset_sources
+            colors=[cmap_pars(float(ng)/float(num_dataset_sources)) for ng in range(num_dataset_sources)]
+        else:
+            cmap_pars = pylab.cm.get_cmap('spring')
+            colors=[cmap_pars(float(ng)/float(len(DataFrame['Survey']))) for ng in range(len(DataFrame['Survey']))]
         
         plt_pos = np.arange(len(DataFrame))
         
@@ -448,28 +527,49 @@ class LongfinMap(object):
                 
         elif self.plotType == 'boxwhisker':
             plt_data = self._formatPlotData(DataFrame)
-            if not self.compare:
+            if self.compare:
+                if self.datatype == 'mulitpredicted':
+                    bw_pos = list(np.arange(0, len(DataFrame)*1.5))
+                    del bw_pos[len(DataFrame)::(len(DataFrame) + 1)]
+                    box1 = ax.bxp(plt_data, positions=bw_pos, showfliers=False, patch_artist=True)
+                    i = 0
+                    for pn, patch in enumerate(box1['boxes']):
+                        patch.set(facecolor=colors[i], edgecolor=colors[i]) 
+                        plt.setp(box1['whiskers'][pn*2], color=colors[i]) #Note, each whisker is its own entity
+                        plt.setp(box1['whiskers'][pn*2+1], color=colors[i])
+                        plt.setp(box1['medians'][pn], color='black')
+                        if i == len(DataFrame):
+                            i = 0
+                        else:
+                            i += 1
+                else:
+                    bw_pos = list(np.arange(0, len(DataFrame)*1.5))
+                    del bw_pos[2::3]
+                    box1 = ax.bxp(plt_data, positions=bw_pos, showfliers=False, patch_artist=True)
+                    for pn, patch in enumerate(box1['boxes']):
+                        if pn % 2 == 0:
+                            patch.set(facecolor='orange', edgecolor='orange') 
+                            plt.setp(box1['whiskers'][pn*2], color='orange') #Note, each whisker is its own entity
+                            plt.setp(box1['whiskers'][pn*2+1], color='orange')
+                            plt.setp(box1['medians'][pn], color='black') 
+                        else:
+                            patch.set(facecolor='green', edgecolor='green') 
+                            plt.setp(box1['whiskers'][pn*2], color='green') #Note, each whisker is its own entity
+                            plt.setp(box1['whiskers'][pn*2+1], color='green')
+                            plt.setp(box1['medians'][pn], color='black') 
+                        
+            else:
                 box1 = ax.bxp(plt_data, showfliers=False, patch_artist=True)
                 for pn, patch in enumerate(box1['boxes']): #colors each survey its own color from the color scale
                     patch.set(facecolor=colors[pn], edgecolor=colors[pn]) 
                     plt.setp(box1['whiskers'][pn*2], color=colors[pn]) #Note, each whisker is its own entity
                     plt.setp(box1['whiskers'][pn*2+1], color=colors[pn])
                     plt.setp(box1['medians'][pn], color='black')
-            else:
-                bw_pos = list(np.arange(0, len(DataFrame)*1.5))
-                del bw_pos[2::3]
-                box1 = ax.bxp(plt_data, positions=bw_pos, showfliers=False, patch_artist=True)
-                for pn, patch in enumerate(box1['boxes']):
-                    if pn % 2 == 0:
-                        patch.set(facecolor='orange', edgecolor='orange') 
-                        plt.setp(box1['whiskers'][pn*2], color='orange') #Note, each whisker is its own entity
-                        plt.setp(box1['whiskers'][pn*2+1], color='orange')
-                        plt.setp(box1['medians'][pn], color='black') 
-                    else:
-                        patch.set(facecolor='green', edgecolor='green') 
-                        plt.setp(box1['whiskers'][pn*2], color='green') #Note, each whisker is its own entity
-                        plt.setp(box1['whiskers'][pn*2+1], color='green')
-                        plt.setp(box1['medians'][pn], color='black') 
+                    
+        elif self.plotType == 'timeseries':
+            plt_data = self._formatPlotData(DataFrame, Var=Var)
+            for i, linedata in enumerate(plt_data):
+                ts = ax.plot(linedata, color=colors[i])
         
         self._configure_Subplot(ax, Plot_maximum)
         
@@ -539,6 +639,11 @@ class LongfinMap(object):
                     if data < 1:
                         formatted_data[i] = 1.
                         
+        elif self.plotType == 'timeseries':
+            formatted_data = []
+            for i, tsdata in enumerate(data['Values'].values):
+                formatted_data.append(tsdata)
+                        
         return formatted_data
                      
     
@@ -561,12 +666,19 @@ class LongfinMap(object):
         ax.set_aspect('equal', adjustable='box-forced')
         ax.xaxis.set_visible(False)
         ax.yaxis.set_visible(False)
-        title = 'Longfin Smelt {0}mm to {1}mm'.format(self.Sizes[0], self.Sizes[1])
+        if self.datatype == 'hatch':
+            title = 'Longfin Smelt Hatching'
+        elif self.datatype == 'entrainment':
+            title = 'Longfin Smelt Entrainment'
+        elif self.datatype == 'cohort':
+            title = 'Longfin Smelt Cohort {0}'.format(self.Cohort_Number)
+        else:
+            title = 'Longfin Smelt {0}mm to {1}mm {2}'.format(self.Sizes[0], self.Sizes[1], Var)
         if self.compare:
             title += ' Pred Vs Obs Cohort {0}'.format(self.Cohort_Number)
         if self.Chronological:
             title += ' Chronological'
-        title += ' {0} {1}'.format(Var, self.Year)
+        title += ' {0}'.format(self.Year)
         plt.title(title)
         
     def _create_Plot(self, Var):
@@ -587,20 +699,33 @@ class LongfinMap(object):
         '''
         if not os.path.exists(r'Plots'):
             os.mkdir(r'Plots')
-        filename = '{0}_{1}_Size_{2}mm-{3}mm_{4}'.format(self.Year, self.plotType, self.Sizes[0], self.Sizes[1], Var)
+        if self.datatype == None:
+            filename = '{0}_{1}_Size_{2}mm-{3}mm_{4}'.format(self.Year, self.plotType, self.Sizes[0], self.Sizes[1], Var)
+        elif self.datatype in ['hatch', 'entrainment']:
+            filename = '{0}_{1}_{2}_{3}'.format(self.Year, self.plotType, Var, self.datatype.title())
+        elif self.datatype in ['cohort']:
+            filename = '{0}_{1}_Size_{2}mm-{3}mm_{4}_Cohort{5}'.format(self.Year, self.plotType, self.Sizes[0], self.Sizes[1], Var, self.Cohort_Number)
         if self.compare:
             filename += '_PredVsObs_Cohort{0}'.format(self.Cohort_Number)
         if self.Chronological:
             filename += '_Chronological'
         if self.Log:
             filename += '_Log'
-        filename = 'Plots\{0}.png'.format(filename)
-        plt.savefig(filename, dpi=900, facecolor='white',bbox_inches='tight')
+        self.filename = 'Plots\{0}.png'.format(filename)
+        plt.savefig(self.filename, dpi=900, facecolor='white',bbox_inches='tight')
         plt.close()
         plt.clf()
         
+    def movePlot(self, destination_dir, addName=None):
+        
+        print 'Moving file from {0} to {1}...'.format(os.path.split(self.filename)[0], destination_dir)
+        if addName != None:
+            copyfile(self.filename, os.path.join(destination_dir, os.path.basename(self.filename.split('.')[0] + '_{0}.png'.format(addName))))
+        else:
+            copyfile(self.filename, os.path.join(destination_dir, os.path.basename(self.filename)))
+        
    
-    def plot_bars(self, dataFrame, Var, GrowthRate, Chronological, Log, startDate):
+    def plot_bars(self, dataFrame, Var, GrowthRate, Chronological, Log, startDate, datatype=None, max=0.):
         '''
         Adds subplots for each specified region and adds a new subplot for the data.
         Takes in organized Pandas dataFrame grabs data based on Var.
@@ -610,13 +735,15 @@ class LongfinMap(object):
         self.startDate = startDate
         self.Log = Log
         self.Chronological = Chronological
+        self.datatype = datatype
         boxsize = [10000.,10000.] #Check this
         
         ax, fig = self._create_Plot(Var)
 
-        
-        
-        Plot_maximum = self._get_Plot_Scale(dataFrame, Var)
+        if max > 0.:
+            Plot_maximum = max
+        else:
+            Plot_maximum = self._get_Plot_Scale(dataFrame, Var)
         
         if self.Chronological:
             dataFrame = dataFrame.sort_values(['Region', 'PlotOrder', 'Survey'])
@@ -641,7 +768,7 @@ class LongfinMap(object):
         self._add_GrowthText(ax, GrowthRate)
         self._add_StartDate_Text(ax)
         
-    def plot_boxwhisker(self, dataFrame, Var, Chronological, Log):
+    def plot_boxwhisker(self, dataFrame, Var, Chronological, Log, datatype=None, cohortNum=0, max=0.):
         '''
         Adds subplots for each specified region and adds a new subplot for the data.
         Takes in organized Pandas dataFrame grabs data based on Var.
@@ -650,11 +777,16 @@ class LongfinMap(object):
         self.plotType = 'boxwhisker'
         self.Log = Log
         self.Chronological = Chronological
+        self.Cohort_Number=cohortNum
+        self.datatype = datatype
         boxsize = [10000.,10000.] #Check this
         
         ax, fig = self._create_Plot(Var)
         
-        Plot_maximum = self._get_Plot_Scale(dataFrame, Var)
+        if max > 0.:
+            Plot_maximum = max
+        else:
+            Plot_maximum = self._get_Plot_Scale(dataFrame, Var)
         
         if Chronological:
             dataFrame = dataFrame.sort_values(['Region', 'PlotOrder', 'Survey'])
@@ -677,7 +809,7 @@ class LongfinMap(object):
             
         self._add_Legend(fig, ax, boxsize, region_data, Var, Plot_maximum)
         
-    def plot_ObsVsPred_Boxwhisker(self, dataFrame, Var, Chronological, Cohort_Number, Log):
+    def plot_ObsVsPred_Boxwhisker(self, dataFrame, Var, Chronological, Cohort_Number, Log, datatype=None, max=0.):
         '''
         Adds subplots for each specified region and adds a new subplot for the data.
         Takes in organized Pandas dataFrame grabs data based on Var.
@@ -688,17 +820,24 @@ class LongfinMap(object):
         self.plotType = 'boxwhisker'
         self.Chronological = Chronological
         self.Cohort_Number = Cohort_Number
+        self.datatype = datatype
         boxsize = [10000.,10000.] #Check this
         
         ax, fig = self._create_Plot(Var)
         
-        Plot_maximum = self._get_Plot_Scale(dataFrame, Var)
+        if max > 0.:
+            Plot_maximum = max
+        else:
+            Plot_maximum = self._get_Plot_Scale(dataFrame, Var)
         
 #         if Chronological:
 #             dataFrame = dataFrame.sort_values(['Region', 'PlotOrder', 'Survey'])
 #         else:
 #             dataFrame = dataFrame.sort_values(['LoadOrder', 'Region', 'Survey'])
-        dataFrame = dataFrame.sort_values(['Region', 'Survey'])
+        if self.datatype == 'multipredicted':
+            dataFrame = dataFrame.sort_values(['Region', 'Survey', 'LoadOrder'])
+        else:
+            dataFrame = dataFrame.sort_values(['Region', 'Survey'])
 
         
         for region in self.plot_poly_dict.keys():
@@ -710,15 +849,50 @@ class LongfinMap(object):
             fig_coords = self._get_Fig_Coordinates(fig, ax, self._findSiteLoc(region), boxsize)
             axb = fig.add_axes(Bbox(fig_coords))
             
-            
             self._add_Subplot(axb, region_data, Var, Plot_maximum, labels=labels)
             fig.show()
             fig.canvas.draw()
             
         self._add_Legend(fig, ax, boxsize, region_data, Var, Plot_maximum)
+     
+    def plot_timeseries(self, dataFrame, Var, Log, datatype=None, max=0.):
+        '''
+        Adds subplots for each specified region and adds a new subplot for the data.
+        Takes in organized Pandas dataFrame grabs data based on Var.
+        [TODO] If Chronological, organizes data based on sample date.
+        '''
+        self.compare = False
+        self.Log = Log
+        self.Chronological = False
+        self.plotType = 'timeseries'
+        self.datatype = datatype
+        boxsize = [10000.,10000.] #Check this
+        self.numdays = self._getNumdays(dataFrame)
+        ax, fig = self._create_Plot(Var)
+        
+        if max > 0.:
+            Plot_maximum = max
+        else:
+            Plot_maximum = self._get_Plot_Scale(dataFrame, Var)
+        
+        dataFrame = dataFrame.sort_values(['Region', 'Survey'])
 
         
-        
+        for region in self.plot_poly_dict.keys():
+
+            region_data = dataFrame.query('Region=="{0}"'.format(region))
+            regionCheck = self._regionCheck(region_data['Values'].values)
+            if regionCheck:
+#                 labels = self._get_Plot_Labels(region_data)
+                
+                fig_coords = self._get_Fig_Coordinates(fig, ax, self._findSiteLoc(region), boxsize)
+                axb = fig.add_axes(Bbox(fig_coords))
+                self._add_Subplot(axb, region_data, Var, Plot_maximum)
+                fig.show()
+                fig.canvas.draw()
+            
+        self._add_Legend(fig, ax, boxsize, region_data, Var, Plot_maximum)
+          
         
         
         

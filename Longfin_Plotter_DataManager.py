@@ -44,6 +44,8 @@ class DataManager(object):
             self.mainDataFrame = pd.DataFrame(columns=['Region', 'Survey', 'StartDate', 'Source', 'LoadOrder', 'Abundance', 'Density'])
         elif self.plottype == 'boxwhisker':
             self.mainDataFrame = pd.DataFrame(columns=['Region', 'Survey', 'Source', 'LoadOrder', 'q5', 'q25', 'q50', 'q75', 'q95']) 
+        elif self.plottype == 'timeseries':
+            self.mainDataFrame = pd.DataFrame(columns=['Region', 'Survey', 'Source', 'LoadOrder', 'Values'])
         print 'Main Data Frame initialized...'
         
     def _append_mainDataframe(self, **kwargs):
@@ -70,6 +72,13 @@ class DataManager(object):
                                                             'q50': kwargs['q50'], 
                                                             'q75': kwargs['q75'], 
                                                             'q95': kwargs['q95']}, 
+                                                            ignore_index=True)
+        elif self.plottype == 'timeseries':
+            self.mainDataFrame = self.mainDataFrame.append({'Region': kwargs['Region'],
+                                                            'Survey': kwargs['Survey'],
+                                                            'Source': kwargs['Source'],
+                                                            'LoadOrder': kwargs['LoadOrder'],
+                                                            'Values': kwargs['Values']}, 
                                                             ignore_index=True)
             
         print 'Main Data Frame Appended with Region {0} Survey {1} from {2}'.format(kwargs['Region'], kwargs['Survey'], kwargs['Source'])
@@ -107,7 +116,7 @@ class DataManager(object):
             self.static_volumes[region.replace(' ', '_')] = df['vol_top_999_m'][i]
         return
     
-    def _get_Valid_Idx(self, Key, DataField, Filter=None):
+    def _get_Valid_Idx(self, Key, DataField, Filter=None, contain=False):
         '''
         Gathers all the correct indexes for a trawl data file for a determined column and key.
         For example, gathers all index for Region Napa Sonoma
@@ -122,14 +131,24 @@ class DataManager(object):
         
         returns list of indexes in Trawl Data csv that meets criteria
         '''
-        if DataField not in self.Trawl_Data.columns:
-            print 'ERROR in Trawl Data. Field {0} not found in headers.'.format(DataField)
-            print 'Ensure Trawl Data has proper headers and restart.'
-            sys.exit(0)
+        if contain:
+            print Key
+            valid_Idx = [r for r, value in enumerate(self.Trawl_Data.columns.values) if str(Key) in value]
+            if Filter != None and type(Filter) == list:
+                valid_Idx = list(set(valid_Idx).intersection(Filter))
             
-        valid_Idx = [r for r, value in enumerate(self.Trawl_Data[DataField].values) if value == Key]
-        if Filter != None and type(Filter) == list:
-            valid_Idx = list(set(valid_Idx).intersection(Filter))
+            if len(valid_Idx) == 0:
+                print 'ERROR in Trawl Data. Field {0} not found in headers.'.format(Key)
+                
+        else:
+            if DataField not in self.Trawl_Data.columns:
+                print 'ERROR in Trawl Data. Field {0} not found in headers.'.format(DataField)
+                print 'Ensure Trawl Data has proper headers and restart.'
+                sys.exit(0)
+                
+            valid_Idx = [r for r, value in enumerate(self.Trawl_Data[DataField].values) if value == Key]
+            if Filter != None and type(Filter) == list:
+                valid_Idx = list(set(valid_Idx).intersection(Filter))
             
         return valid_Idx
     
@@ -184,7 +203,7 @@ class DataManager(object):
     
 
     
-    def _get_Region_Stats(self, Region, Survey, Sizes=[0,0], predicted=False):     
+    def _get_Region_Stats(self, Region, Survey, Sizes=[0,0], datatype=None):     
         '''
         For a specific dataset, finds and calculates the density and abundance and starttime of 
         a specific region and survey
@@ -207,7 +226,72 @@ class DataManager(object):
             return Region_Abundance, Region_Density, StartDate
         
         elif self.plottype == 'boxwhisker':
-            if not predicted:
+            if datatype in ['predicted', 'multipredicted']:
+                valid_headers = [n for n in self.Trawl_Data.columns.values if Region in n]
+                region_df = pd.DataFrame(columns={'Region', 'q5', 'q25', 'q50', 'q75', 'q95', 'Day', 'Source'})
+                
+                for index, row in self.Trawl_Data.iterrows():
+                    try:
+                        date_string = dt.datetime(1970,1,1) + dt.timedelta(days=int(row['date_string']))
+                    except KeyError:
+                        date_string = dt.datetime(1970,1,1)
+                        
+#                         
+                    region_df = region_df.append({'Region':Region,
+                                                  'Day':date_string},
+                                                  ignore_index=True)
+                    
+                    for header in valid_headers:
+                        quantile = 'q' + str(header.split('_')[-1])
+                        region_df.ix[index, quantile] = row[header]
+                        
+                return region_df
+            
+            elif datatype in ['hatch', 'entrainment']:
+                valid_headers = [n for n in self.Trawl_Data.columns.values if Region in n]
+                region_df = pd.DataFrame(columns={'Region', 'q5', 'q25', 'q50', 'q75', 'q95', 'Cohort', 'Source'})
+                
+                for index, row in self.Trawl_Data.iterrows():
+                    cohort = row['cohort']
+                        
+#                         
+                    region_df = region_df.append({'Region':Region,
+                                                  'Cohort':cohort},
+                                                  ignore_index=True)
+                    
+                    for header in valid_headers:
+                        quantile = 'q' + str(header.split('_')[-1])
+                        region_df.ix[index, quantile] = row[header]
+                        
+                return region_df
+            
+            elif datatype in ['condensed_predicted']:
+                valid_headers = [n for n in self.Trawl_Data.columns.values if Region in n]
+                valid_headers = [n for n in valid_headers if n.split('_')[-2] == str(Survey)]
+                region_df = pd.DataFrame(columns={'Region', 'q5', 'q25', 'q50', 'q75', 'q95', 'Day', 'Source', 'Survey'})
+                
+                for index, row in self.Trawl_Data.iterrows():
+                    try:
+                        date_string = dt.datetime(1970,1,1) + dt.timedelta(days=int(row['date_string']))
+                    except KeyError:
+                        date_string = dt.datetime(1970,1,1)
+                        
+#                         
+                    region_df = region_df.append({'Region':Region,
+                                                  'Day':date_string},
+                                                  ignore_index=True)
+                    
+                    for header in valid_headers:
+                        quantile = 'q' + str(header.split('_')[-1])
+                        region_df.ix[index, quantile] = row[header]
+                    region_df.ix[index, 'Survey'] = Survey
+                        
+                    
+                        
+                return region_df
+            
+            
+            elif datatype == None:
                 region_idx = self._get_Valid_Idx(Region.replace('_', ' '), 'region')
                 Survey_Idx = self._get_Valid_Idx(Survey, 'survey', Filter=region_idx)
                 if len(Survey_Idx) > 1:
@@ -221,21 +305,18 @@ class DataManager(object):
                 q5,q25,q50,q75,q95 = self._get_BoxWhisker_Stats(Survey_Idx)
                 return q5,q25,q50,q75,q95
             
-            else:
-                valid_headers = [n for n in self.Trawl_Data.columns.values if Region in n]
-                region_df = pd.DataFrame(columns={'Region', 'q5', 'q25', 'q50', 'q75', 'q95', 'Day', 'Source'})
+        elif self.plottype == 'timeseries':
+            region_idx = self._get_Valid_Idx(Region, 'region', contain=True)
+            Survey_Idx = self._get_Valid_Idx(Survey, 'Survey', Filter=region_idx, contain=True)
+            region_df = pd.DataFrame(columns={'Region', 'Data', 'Survey', 'Source'})    
                 
-                for index, row in self.Trawl_Data.iterrows():
-                    date_string = dt.datetime(1970,1,1) + dt.timedelta(days=int(row['date_string']))
-                    region_df = region_df.append({'Region':Region,
-                                                  'Day':date_string},
-                                                  ignore_index=True)
+            for i, (label, content) in enumerate(self.Trawl_Data.iteritems()):
+                if i in Survey_Idx:
+                    region = '_'.join(label.split('_')[:-1])
+                    survey = label.split('_')[-1]
+                    data = content.tolist()
                     
-                    for header in valid_headers:
-                        quantile = 'q' + str(header.split('_')[-1])
-                        region_df.ix[index, quantile] = row[header]
-                        
-                return region_df
+                    return data
                     
                 
             
@@ -328,31 +409,34 @@ class DataManager(object):
                 counted_Surveys.append(SurvSource)
                 
         return counted_Surveys
-    
+
     def _get_Correct_Pred_Sources(self, Survey, Pred_List):
         '''
         Grabs the list of predicted data and organzies them based on Survey number for Total Cohort plots.
         Survey 3 uses quantiles, 1, 2 and 3, Survey 5 uses 1,2,3,4,5, etc...
-        HEAVILY depends on pred data named quantiles_x
+        HEAVILY depends on pred data named quantiles_x or tot_quantiles
         '''
         new_pred_list = []
         for Pred_source in Pred_List:
-            try:
-                if float(Pred_source.split('_')[1]) <= Survey:
-                    new_pred_list.append(Pred_source)
-            except:
-                print 'Unknown file name for predicted data:', Pred_source
-                checkadd = raw_input('Include {0} for Survey {1}? (Y/N)'.format(Pred_source, Survey)) 
-                while checkadd.lower() not in ['y', 'n']:
-                    print 'Input {0} not understood. Please use Y or N to respond.'.format(checkadd)
+            if Pred_source.split('_')[0].lower() == 'tot':
+                new_pred_list.append(Pred_source)
+            else:
+                try:
+                    if float(Pred_source.split('_')[1]) <= Survey:
+                        new_pred_list.append(Pred_source)
+                except:
+                    print 'Unknown file name for predicted data:', Pred_source
                     checkadd = raw_input('Include {0} for Survey {1}? (Y/N)'.format(Pred_source, Survey)) 
-                if checkadd.lower() == 'y':
-                    print 'Using {0} for Survey {1}'.format(Pred_source, Survey)
-                    new_pred_list.append(Pred_source)
-                elif checkadd.lower() == 'n':
-                    print 'Not using {0} for Survey {1}'.format(Pred_source, Survey)
-                else:
-                    print 'You should never be here. Begone.'
+                    while checkadd.lower() not in ['y', 'n']:
+                        print 'Input {0} not understood. Please use Y or N to respond.'.format(checkadd)
+                        checkadd = raw_input('Include {0} for Survey {1}? (Y/N)'.format(Pred_source, Survey)) 
+                    if checkadd.lower() == 'y':
+                        print 'Using {0} for Survey {1}'.format(Pred_source, Survey)
+                        new_pred_list.append(Pred_source)
+                    elif checkadd.lower() == 'n':
+                        print 'Not using {0} for Survey {1}'.format(Pred_source, Survey)
+                    else:
+                        print 'You should never be here. Begone.'
                     
         return new_pred_list
     
@@ -477,9 +561,15 @@ class DataManager(object):
                 if row['StartDate'].year == self.Year and row['EndDate'].year == self.Year:
                     survey_dates.append(row['StartDate'])
                     survey_dates.append(row['EndDate'])
-                    
-        startDate = min(survey_dates)
-        endDate = max(survey_dates)
+        
+        try:            
+            startDate = min(survey_dates)
+        except ValueError:
+            startDate = dt.datetime(1900,1,1)
+        try:
+            endDate = max(survey_dates)
+        except:
+            endDate = dt.datetime(2100,1,1)
         
         return startDate, endDate
     
@@ -532,33 +622,59 @@ class DataManager(object):
             survey_order = self._get_Survey_Order(self.mainDataFrame)
             self._add_PlotOrder(survey_order)
             
-    def addDataset(self, Trawl_Data, Surveys, load_order, predicted=False):
+    def addDataset(self, Trawl_Data, Surveys, load_order, datatype=None):
         '''
         Reads in dataset and gets the main data, and then adds it to the master dataframe
         '''
         self._read_Trawl_Data(Trawl_Data)
-        if not predicted:
+        
+        if datatype in ['predicted', 'multipredicted', 'cohort']:
+            for region in self.regions:
+                if self.plottype == 'boxwhisker':
+                    region_df = self._get_Region_Stats(region, 0, datatype=datatype)
+                    region_df['Source'] = os.path.basename(Trawl_Data).split('.')[0]
+                    region_df['LoadOrder'] = load_order
+                    self._merge_with_mainDataFrame(region_df)
+            self.mainDataFrame = self.mainDataFrame.reset_index(drop=True)
+            
+        elif datatype in ['hatch', 'entrainment']:
+            for region in self.regions:
+                if self.plottype == 'boxwhisker':
+                    region_df = self._get_Region_Stats(region, 0, datatype=datatype)
+                    region_df['Source'] = os.path.basename(Trawl_Data).split('.')[0]
+                    region_df['LoadOrder'] = load_order
+                    self._merge_with_mainDataFrame(region_df)
+            self.mainDataFrame = self.mainDataFrame.reset_index(drop=True)
+            
+        elif datatype in ['condensed_predicted']:
+            for region in self.regions:
+                for survey in Surveys:
+                    if self.plottype == 'boxwhisker':
+                        region_df = self._get_Region_Stats(region, survey, datatype=datatype)
+                        region_df['Source'] = os.path.basename(Trawl_Data).split('.')[0]
+                        region_df['LoadOrder'] = load_order
+                        self._merge_with_mainDataFrame(region_df)
+                self.mainDataFrame = self.mainDataFrame.reset_index(drop=True)
+            
+        elif datatype == None:
             for region in self.regions:
                 for survey in Surveys:
                     if self.plottype == 'bar':
-                        abundance, density, firstDate = self._get_Region_Stats(region, survey, predicted=predicted)
+                        abundance, density, firstDate = self._get_Region_Stats(region, survey, datatype=datatype)
                         density *= self._get_Density_Scalar(Trawl_Data)
                         self._append_mainDataframe(Region=region, Survey=survey, StartDate=firstDate, LoadOrder=load_order,
                                                    Source=Trawl_Data, Abundance=abundance, Density=density)
                     elif self.plottype == 'boxwhisker':
-                        q5, q25, q50, q75, q95 = self._get_Region_Stats(region, survey, predicted=predicted)
+                        q5, q25, q50, q75, q95 = self._get_Region_Stats(region, survey, datatype=datatype)
                         self._append_mainDataframe(Region=region, Survey=survey, Source=Trawl_Data, LoadOrder=load_order,
                                                    q5=q5, q25=q25, q50=q50, q75=q75, q95=q95)
-        else:
-            for region in self.regions:
-                if self.plottype == 'boxwhisker':
-                    region_df = self._get_Region_Stats(region, 0, predicted=predicted)
-                    region_df['Source'] = os.path.basename(Trawl_Data).split('.')[0]
-                    self._merge_with_mainDataFrame(region_df)
-            self.mainDataFrame = self.mainDataFrame.reset_index(drop=True)
+                    elif self.plottype == 'timeseries':
+                        ts_data = self._get_Region_Stats(region, survey, datatype=datatype)
+                        self._append_mainDataframe(Region=region, Survey=survey, Source=Trawl_Data, LoadOrder=load_order,
+                                                   Values=ts_data)
                                                    
 
-    def InitializeData(self, Trawl_Data, predicted=False):
+    def InitializeData(self, Trawl_Data, datatype=None):
         '''
         Takes in a dataset and adds it to the main dataframe
         '''
@@ -571,20 +687,27 @@ class DataManager(object):
             
         self.Surveys = self._check_surveyLength(len_data, self.Surveys)
         
-        if not predicted: 
+        if datatype in ['hatch', 'entrainment', 'multipredicted', 'predicted', 'cohort', 'condensed_predicted']:
             for i, Trawl_data_Source in enumerate(Trawl_Data):
                 if self.plottype == 'boxwhisker':
-                    self.addDataset(Trawl_data_Source, self.Surveys[i], i)
-                elif self.plottype == 'bar':
-                    self.addDataset(Trawl_data_Source, self.Surveys[i], i)
-        else:
-            for i, Trawl_data_Source in enumerate(Trawl_Data):
-                if self.plottype == 'boxwhisker':
-                    self.addDataset(Trawl_data_Source, self.Surveys[i], i, predicted=True)
+                    self.addDataset(Trawl_data_Source, self.Surveys[i], i, datatype=datatype)
                 elif self.plottype == 'bar':
                     print 'Predicted Dataset Bar plots not yet implemented.'
                     print 'Now Exiting...'
                     sys.exit(0)
+        
+        elif datatype == None: 
+            for i, Trawl_data_Source in enumerate(Trawl_Data):
+                if self.plottype == 'boxwhisker':
+                    self.addDataset(Trawl_data_Source, self.Surveys[i], i)
+                elif self.plottype == 'bar':
+                    self.addDataset(Trawl_data_Source, self.Surveys[i], i)
+                elif self.plottype == 'timeseries':
+                    self.addDataset(Trawl_data_Source, self.Surveys[i], i)
+                    
+        else:
+            print 'unknown datatype. Now Exiting...'
+            sys.exit(0)
             
         print 'Added {0} Dataset(s)'.format(len(Trawl_Data))
                 
@@ -639,7 +762,7 @@ class DataManager(object):
         DataFrame = self._connect_Sources(DataFrame)
         self._add_Dates(DataFrame)
             
-    def get_Predicted_Timed_Data(self, Observed_Data, Total=False):   
+    def get_Predicted_Timed_Data(self, Observed_Data, datatype=None):   
         '''
         Gets the correct predicted time series data from Computed data excel files. 
         Observed forms give daily values for q5, q25, q50, q75, and q95 regional values.
@@ -655,7 +778,7 @@ class DataManager(object):
             EndDate = row['EndDate']
             if StartDate > EndDate:
                 StartDate, EndDate = self._get_Survey_Dates(Observed_Data, row['Survey'])
-            if Total:
+            if datatype == 'total':
                 Pred_Source_list = list(set(self.mainDataFrame['Source'].tolist())) #gets unique values for a column. Ugly, but effective
                 Pred_Source_list = self._get_Correct_Pred_Sources(row['Survey'], Pred_Source_list)
                 q5_val = q25_val = q50_val = q75_val = q95_val = 0.
@@ -678,6 +801,35 @@ class DataManager(object):
                                                   'q75': q75_val,
                                                   'q95': q95_val},
                                                   ignore_index=True)
+            elif datatype == 'multipredicted':
+                Pred_Source_list = list(set(self.mainDataFrame['Source'].tolist())) #gets unique values for a column. Ugly, but effective
+                for source in Pred_Source_list:
+                    update_idx = [r for r, DFrow in self.mainDataFrame.iterrows() if DFrow['Region'] == row['Region'] and DFrow['Source'] == source]
+                    q5, q25, q50, q75, q95 = self._get_boxwhisker_Date_values(StartDate, EndDate, update_idx)
+                       
+                    Avg_Pred_Df = Avg_Pred_Df.append({'Region': row['Region'],
+                                                      'Survey': row['Survey'],
+                                                      'Source': source,
+                                                      'q5': np.average(q5) if len(q5) >= 1 else 0.,
+                                                      'q25': np.average(q25) if len(q25) >= 1 else 0.,
+                                                      'q50': np.average(q50) if len(q50) >= 1 else 0.,
+                                                      'q75': np.average(q75) if len(q75) >= 1 else 0.,
+                                                      'q95': np.average(q95) if len(q95) >= 1 else 0.},
+                                                      ignore_index=True)
+                
+            elif datatype == 'condense_predicted':
+                update_idx = [r for r, DFrow in self.mainDataFrame.iterrows() if DFrow['Region'] == row['Region'] and DFrow['Survey'] == row['Survey']]
+                q5, q25, q50, q75, q95 = self._get_boxwhisker_Date_values(StartDate, EndDate, update_idx)
+                   
+                Avg_Pred_Df = Avg_Pred_Df.append({'Region': row['Region'],
+                                                  'Survey': row['Survey'],
+                                                  'Source': 'Computed',
+                                                  'q5': np.average(q5) if len(q5) >= 1 else 0.,
+                                                  'q25': np.average(q25) if len(q25) >= 1 else 0.,
+                                                  'q50': np.average(q50) if len(q50) >= 1 else 0.,
+                                                  'q75': np.average(q75) if len(q75) >= 1 else 0.,
+                                                  'q95': np.average(q95) if len(q95) >= 1 else 0.},
+                                                  ignore_index=True)                
                 
             else:
                 update_idx = [r for r, DFrow in self.mainDataFrame.iterrows() if DFrow['Region'] == row['Region']]
@@ -691,8 +843,8 @@ class DataManager(object):
                                                   'q50': np.average(q50) if len(q50) >= 1 else 0.,
                                                   'q75': np.average(q75) if len(q75) >= 1 else 0.,
                                                   'q95': np.average(q95) if len(q95) >= 1 else 0.},
-                                                  ignore_index=True)
-            
+                                                  ignore_index=True)                
+                
         return Avg_Pred_Df
     
     def get_StartDate(self, Region, Survey):
