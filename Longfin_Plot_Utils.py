@@ -274,7 +274,7 @@ class LongfinMap(object):
                                         "whislo": 0,
                                         "whishi": Plot_Maximum})
             elif self.plotType == 'timeseries':
-                linescalar = float(Plot_Maximum) / num_Surveys
+                linescalar = float(Plot_Maximum * .95) / num_Surveys
                 datalevel = linescalar  * (i+1)
                 legend_data.append([datalevel] * self.numdays)
         return legend_data
@@ -316,15 +316,23 @@ class LongfinMap(object):
                 del xticks[2::3]
             else:
                 xticks = np.arange(len(Labels))
+        elif self.plotType == 'timeseries':
+
+            xlims = ax.get_xlim()
+            xticks = np.arange(0, xlims[1], (round(xlims[1], -1)/2))
         else:
             xticks = np.arange(len(Labels))
                 
-#         elif plotType == 'timeseries':
+
+            
             
             
         ax.set_xticks(xticks)
         if self.datatype in ['hatch', 'entrainment']:
-            ax.set_xticklabels(Labels,ha='center',fontsize=8)
+            if self.plotType == 'timeseries':
+                print 'entrainment TS, no xtick labels'
+            else:
+                ax.set_xticklabels(Labels,ha='center',fontsize=8)
 
         elif self.datatype in [None, 'cohort']:
             ax.set_xticklabels(Labels,rotation=90,ha='center',fontsize=8)
@@ -336,10 +344,14 @@ class LongfinMap(object):
             ax.set_yticks([plot_minimum, 10**round(np.mean([np.log10(plot_minimum), np.log10(Plot_maximum)])), Plot_maximum])
         else:
             ax.set_yticks([0, Plot_maximum])
-            ax.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
+            ax.ticklabel_format(style='sci', axis='y', scilimits=(-2,2))
         if self.datatype == 'hatch' or self.datatype == 'entrainment':
-            ax.set_xlabel('Cohort')
-            ax.set_ylabel('Larvae')
+            if self.plotType == 'timeseries':
+                ax.set_xlabel('Days Since Hatch')
+                ax.set_ylabel('Proportional Larvae')
+            else:
+                ax.set_xlabel('Cohort')
+                ax.set_ylabel('Larvae')
         ax.set_ylabel(Var)
         
     def _configure_Subplot(self, ax, Plot_maximum):
@@ -368,6 +380,7 @@ class LongfinMap(object):
                 labelleft=False,
                 labeltop=False) # labels along the bottom edge are off
         elif self.plotType == 'timeseries':
+            ax.set_frame_on(True)
             ax.spines['right'].set_visible(False)
             ax.spines['top'].set_visible(False)
             ax.set_yticklabels([])
@@ -446,12 +459,12 @@ class LongfinMap(object):
         elif self.plotType == 'timeseries':
             for i, dataseries in enumerate(data):
                 leg, = ax.plot(dataseries, color=colors[i], label=(i+1))
-                
-            box = ax.get_position()
-            ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
-            handles, labels = ax.get_legend_handles_labels()
-            ax.legend(handles[::-1], labels[::-1], bbox_to_anchor=(1, 0.5), loc='center left', fontsize=4)
-            
+
+#             box = ax.get_position()
+#             ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
+#             handles, labels = ax.get_legend_handles_labels()
+#             ax.legend(handles[::-1], labels[::-1], bbox_to_anchor=(1, 0.5), loc='center left', fontsize=len(data), frameon=False)
+
 
     def _add_Legend(self, fig, ax, boxsize, DataFrame, Var, Plot_maximum):
         '''
@@ -465,8 +478,9 @@ class LongfinMap(object):
         plot_Legend_labels = self._get_Plot_Legend_labels(Surveys)
         
         mod = self._get_Legend_size_Modifier(DataFrame, Var)
-        
-        fig_coords = self._get_Fig_Coordinates(fig, ax, self.xy_leg, boxsize, mod=mod)
+        boxsize = [20000.,20000.]
+        new_xy_leg = [self.xy_leg[0] + (boxsize[1]/2), self.xy_leg[1] - (boxsize[1]/2)]
+        fig_coords = self._get_Fig_Coordinates(fig, ax, new_xy_leg, boxsize, mod=mod)
         axb = fig.add_axes(Bbox(fig_coords))
         
         legend_data = self._make_Legend_Data(len(plot_Legend_labels), Plot_maximum)
@@ -474,6 +488,8 @@ class LongfinMap(object):
         self._add_Legend_Subplot(axb, legend_data, Var)
         
         self._configure_Legend(axb, Plot_maximum, plot_Legend_labels, Var)
+        
+        self._add_TS_legend_labels(axb, Plot_maximum, plot_Legend_labels, legend_data)
 
     def _add_StartDate_Text(self, ax):
         '''
@@ -602,8 +618,20 @@ class LongfinMap(object):
                     for tick, label in zip(range(numBoxes), labels):
                         ax.text(pos[tick], ylims[0] * 1.005, label, ha='center', va='bottom', color='red', fontsize=7)
                     
+    def _add_TS_legend_labels(self, axb, Plot_maximum, plot_Legend_labels, legend_data):
+        axb2 = axb.twinx()
+        axb2.set_ylim(0, Plot_maximum)
         
-    
+        axb2.spines['right'].set_visible(False)
+        axb2.spines['top'].set_visible(False)
+        leg_data = []
+        leg_labels = []
+        for i, data in enumerate(legend_data):
+            leg_data.append(data[0])
+            leg_labels.append(str(plot_Legend_labels[i]))
+        axb2.set_yticks(leg_data)  
+        axb2.set_yticklabels(leg_labels)
+        axb2.set_ylabel('Cohorts')
     
     def _formatPlotData(self, data, Var=None):
         '''
@@ -893,7 +921,7 @@ class LongfinMap(object):
             
         print Plot_maximum
             
-#         self._add_Legend(fig, ax, boxsize, region_data, Var, Plot_maximum)
+        self._add_Legend(fig, ax, boxsize, region_data, Var, Plot_maximum)
           
         
         

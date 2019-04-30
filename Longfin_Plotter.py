@@ -468,7 +468,7 @@ if __name__ == '__main__':
     if EntrainmentTS:
         Var = 'Larvae'
         sizes=[]
-        surveys = [1,2,3,4,5,6,7]
+        surveys = [1,2,3,4,5,6]
         entrainment_files = r"C:\git\longfin_trawl_map\4-16-2019\alpha3\proportional_entrainment.csv"
         lfp = LongfinPlotter(run_dir, grd_file, year, sizes, surveys)
         lfp.make_TimeSeries_Plots(entrainment_files, datatype='entrainment', max=.4)
