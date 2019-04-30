@@ -267,8 +267,8 @@ class DataManager(object):
             
             elif datatype in ['condensed_predicted']:
                 valid_headers = [n for n in self.Trawl_Data.columns.values if Region in n]
-                valid_headers = [n for n in valid_headers if n.split('_')[-2] == str(Survey)]
-                region_df = pd.DataFrame(columns={'Region', 'q5', 'q25', 'q50', 'q75', 'q95', 'Day', 'Source', 'Survey'})
+#                 valid_headers = [n for n in valid_headers if n.split('_')[-2] == str(Survey)]
+                region_df = pd.DataFrame(columns={'Region', 'q5', 'q25', 'q50', 'q75', 'q95', 'Day', 'Source', 'Cohort'})
                 
                 for index, row in self.Trawl_Data.iterrows():
                     try:
@@ -277,15 +277,30 @@ class DataManager(object):
                         date_string = dt.datetime(1970,1,1)
                         
 #                         
-                    region_df = region_df.append({'Region':Region,
-                                                  'Day':date_string},
-                                                  ignore_index=True)
                     
+                    header_lib = {}
                     for header in valid_headers:
+                        cohort =  str(header.split('_')[-2])
+                        if cohort not in header_lib.keys():
+                            header_lib[cohort] = {}
                         quantile = 'q' + str(header.split('_')[-1])
-                        region_df.ix[index, quantile] = row[header]
-                    region_df.ix[index, 'Survey'] = Survey
+                        header_lib[cohort][quantile] = row[header]
                         
+                    for cohort in header_lib.keys():
+                        region_df = region_df.append({'Region':Region,
+                                                  'Day':date_string,
+                                                  'Cohort': int(cohort),
+                                                  'q5': header_lib[cohort]['q5'], 
+                                                  'q25': header_lib[cohort]['q25'],
+                                                  'q50': header_lib[cohort]['q50'],
+                                                  'q75': header_lib[cohort]['q75'],
+                                                  'q95': header_lib[cohort]['q95']},
+                                                  ignore_index=True)
+#                         for quantile in header_lib[cohort]:
+#                             region_df.ix[index, quantile] = row[header]
+                        
+                        
+                
                     
                         
                 return region_df
@@ -648,13 +663,13 @@ class DataManager(object):
             
         elif datatype in ['condensed_predicted']:
             for region in self.regions:
-                for survey in Surveys:
-                    if self.plottype == 'boxwhisker':
-                        region_df = self._get_Region_Stats(region, survey, datatype=datatype)
-                        region_df['Source'] = os.path.basename(Trawl_Data).split('.')[0]
-                        region_df['LoadOrder'] = load_order
-                        self._merge_with_mainDataFrame(region_df)
-                self.mainDataFrame = self.mainDataFrame.reset_index(drop=True)
+#                 for survey in Surveys:
+                if self.plottype == 'boxwhisker':
+                    region_df = self._get_Region_Stats(region, 0, datatype=datatype)
+                    region_df['Source'] = os.path.basename(Trawl_Data).split('.')[0]
+                    region_df['LoadOrder'] = load_order
+                    self._merge_with_mainDataFrame(region_df)
+            self.mainDataFrame = self.mainDataFrame.reset_index(drop=True)
             
         elif datatype == None:
             for region in self.regions:
@@ -739,7 +754,7 @@ class DataManager(object):
                     self._update_mainDataframe(index, {'Abundance': abundance, 'Density': density})
                     i += 1
     
-    def get_Dates(self, Dataset):
+    def get_Dates(self, Dataset, startdate=None, obsenddate=None):
         '''
         Creates a new dataframe that keeps track of the region, survey, starttime, endtime, and source.
         reads in the passed in dataframe, then gathers the correct data, and connects the data
@@ -751,8 +766,14 @@ class DataManager(object):
             self._read_Trawl_Data(datasource)
             for region in self.regions:
                     for survey in self.Surveys[i]:
-                        startDate = self.get_StartDate(region, survey)
-                        endDate = self.get_EndDate(region, survey)
+                        if startdate != None:
+                            startDate = dt.datetime.strptime(startdate, '%Y-%m-%d')
+                        else:
+                            startDate = self.get_StartDate(region, survey)
+                        if obsenddate != None:
+                            endDate = dt.datetime.strptime(startdate, '%Y-%m-%d') + dt.timedelta(days=1)
+                        else:
+                            endDate = self.get_EndDate(region, survey)
                         DataFrame = DataFrame.append({'Region':region,
                                                       'Survey':survey,
                                                       'StartDate':startDate,
@@ -762,7 +783,7 @@ class DataManager(object):
         DataFrame = self._connect_Sources(DataFrame)
         self._add_Dates(DataFrame)
             
-    def get_Predicted_Timed_Data(self, Observed_Data, datatype=None):   
+    def get_Predicted_Timed_Data(self, Observed_Data, datatype=None, cohort=None):   
         '''
         Gets the correct predicted time series data from Computed data excel files. 
         Observed forms give daily values for q5, q25, q50, q75, and q95 regional values.
@@ -777,7 +798,7 @@ class DataManager(object):
             StartDate = row['StartDate']
             EndDate = row['EndDate']
             if StartDate > EndDate:
-                StartDate, EndDate = self._get_Survey_Dates(Observed_Data, row['Survey'])
+                StartDate, EndDate = self._get_Survey_Dates(Observed_Data, row['Survey']) ####gets dates for probable survey
             if datatype == 'total':
                 Pred_Source_list = list(set(self.mainDataFrame['Source'].tolist())) #gets unique values for a column. Ugly, but effective
                 Pred_Source_list = self._get_Correct_Pred_Sources(row['Survey'], Pred_Source_list)
@@ -818,7 +839,7 @@ class DataManager(object):
                                                       ignore_index=True)
                 
             elif datatype == 'condense_predicted':
-                update_idx = [r for r, DFrow in self.mainDataFrame.iterrows() if DFrow['Region'] == row['Region'] and DFrow['Survey'] == row['Survey']]
+                update_idx = [r for r, DFrow in self.mainDataFrame.iterrows() if DFrow['Region'] == row['Region'] and DFrow['Cohort'] == cohort]
                 q5, q25, q50, q75, q95 = self._get_boxwhisker_Date_values(StartDate, EndDate, update_idx)
                    
                 Avg_Pred_Df = Avg_Pred_Df.append({'Region': row['Region'],

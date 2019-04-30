@@ -891,7 +891,9 @@ class LongfinMap(object):
                 fig.show()
                 fig.canvas.draw()
             
-        self._add_Legend(fig, ax, boxsize, region_data, Var, Plot_maximum)
+        print Plot_maximum
+            
+#         self._add_Legend(fig, ax, boxsize, region_data, Var, Plot_maximum)
           
         
         

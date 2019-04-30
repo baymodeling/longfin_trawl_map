@@ -160,6 +160,8 @@ class LongfinPlotter(object):
         Chronological_data: list set of data to correspond with the trawl data. Only needed if Chronological is passed in as True
         Log: Plots data with a log scale instead of a true scale. Can make data with a large variation easier to view. 
         '''
+        Cohorts = self.Surveys #because these are set in a different function, they function about the same
+                                #are renamed here for clarity sake. 
         
         if datatype == 'condensed_predicted':
             if len(Pred_data_list) > 1:
@@ -169,36 +171,37 @@ class LongfinPlotter(object):
             Pred_data_Manager = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, self.Surveys, 'Boxwhisker', '')
             Pred_data_Manager.InitializeData(Pred_data_file, datatype='condensed_predicted')
             
-            All_Surveys = self.Surveys
-            
-            for i, survey in enumerate(self.Surveys):
+            for i, Cohort in enumerate(Cohorts):
                 Obs_data_file = os.path.join(Observed_Data_Dir, Obs_data_list[i])
-                self.Surveys = range(survey, self.Surveys[-1]+1)
+                Cohorts = range(Cohorts, Cohorts[-1]+1)
                 Obs_data_Manager = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, self.Surveys, 'Boxwhisker', '')
                 Obs_data_Manager.InitializeData(Obs_data_file)
                 Obs_data_Manager.get_Dates(Chronological_data)
                 Obs_data = Obs_data_Manager.get_DataFrame()
-                Avg_Pred_Data = Pred_data_Manager.get_Predicted_Timed_Data(Obs_data, datatype='condense_predicted')
+                Avg_Pred_Data = Pred_data_Manager.get_Predicted_Timed_Data(Obs_data, datatype='condense_predicted', cohort=i+1)
                 dataframe = Pred_data_Manager.merge_Dataframes(Avg_Pred_Data, Obs_data)
-                self.Map_Utils.plot_ObsVsPred_Boxwhisker(dataframe, Var, Chronological, survey, Log, max=max)
+                self.Map_Utils.plot_ObsVsPred_Boxwhisker(dataframe, Var, Chronological, Cohort, Log, max=max)
                 self.Map_Utils.savePlot(Var)
         
-        for i, Pred_data in enumerate(Pred_data_list):
-            Cohort_num = int(os.path.basename(Pred_data).split('_')[1].split('.')[0])
-            Pred_data_file = os.path.join(Predicted_Data_Dir, Pred_data)
-            Obs_data_file = os.path.join(Observed_Data_Dir, Obs_data_list[i])
-            print 'Creating Plot for Cohort {0}...'.format(Cohort_num)
-            self.Surveys = range(Cohort_num, self.Surveys[-1]+1)
-            Obs_data_Manager = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, self.Surveys, 'Boxwhisker', '')
-            Obs_data_Manager.InitializeData(Obs_data_file)
-            Obs_data_Manager.get_Dates(Chronological_data)
-            Pred_data_Manager = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, self.Surveys, 'Boxwhisker', '')
-            Pred_data_Manager.InitializeData(Pred_data_file, datatype='predicted')
-            Obs_data = Obs_data_Manager.get_DataFrame()
-            Avg_Pred_Data = Pred_data_Manager.get_Predicted_Timed_Data(Obs_data)
-            dataframe = Pred_data_Manager.merge_Dataframes(Avg_Pred_Data, Obs_data)
-            self.Map_Utils.plot_ObsVsPred_Boxwhisker(dataframe, Var, Chronological, Cohort_num, Log, max=max)
-            self.Map_Utils.savePlot(Var)
+        else:
+            for i, Pred_data in enumerate(Pred_data_list):
+                Cohort_num = int(os.path.basename(Pred_data).split('_')[1].split('.')[0])
+                Pred_data_file = os.path.join(Predicted_Data_Dir, Pred_data)
+                Obs_data_file = os.path.join(Observed_Data_Dir, Obs_data_list[i])
+                print 'Creating Plot for Cohort {0}...'.format(Cohort_num)
+                self.Surveys = range(Cohort_num, self.Surveys[-1]+1)
+                Obs_data_Manager = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, self.Surveys, 'Boxwhisker', '')
+                Obs_data_Manager.InitializeData(Obs_data_file)
+#                 obsstartdate= Obs_data_list[i].split('_')[3]
+#                 obsenddate = Obs_data_list[i].split('_')[3]
+                Obs_data_Manager.get_Dates(Chronological_data)
+                Pred_data_Manager = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, self.Surveys, 'Boxwhisker', '')
+                Pred_data_Manager.InitializeData(Pred_data_file, datatype='predicted')
+                Obs_data = Obs_data_Manager.get_DataFrame()
+                Avg_Pred_Data = Pred_data_Manager.get_Predicted_Timed_Data(Obs_data)
+                dataframe = Pred_data_Manager.merge_Dataframes(Avg_Pred_Data, Obs_data)
+                self.Map_Utils.plot_ObsVsPred_Boxwhisker(dataframe, Var, Chronological, Cohort_num, Log, max=max)
+                self.Map_Utils.savePlot(Var)
             
     def make_MultiPredvsObs_BoxWhisker(self,
                                   Observed_Data_Dir,
@@ -326,12 +329,13 @@ class LongfinPlotter(object):
     def make_TimeSeries_Plots(self,
                               Datafile,
                               Log=False,
-                              datatype=None):
+                              datatype=None,
+                              max=0.):
 
         data = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, self.Surveys, 'timeseries', '')
         data.InitializeData(Datafile)
         data = data.get_DataFrame()
-        self.Map_Utils.plot_timeseries(data, Var, Log, datatype=datatype)
+        self.Map_Utils.plot_timeseries(data, Var, Log, datatype=datatype, max=max)
         self.Map_Utils.savePlot(Var)
 
 ############################################################################
@@ -344,11 +348,11 @@ if __name__ == '__main__':
     box = False
     pvo_boxw = False
     pvo_boxw_Total = False
-    hatch = True
+    hatch = False
     entrainment = False
     PredvsMultiObs = False
     CohortBW = False
-    EntrainmentTS = False
+    EntrainmentTS = True
     
     if bar:
 #         Var = 'Density'
@@ -376,27 +380,28 @@ if __name__ == '__main__':
         
     if pvo_boxw:
         Var = 'Abundance'
-        Pred_data_dir = r"C:\git\longfin_trawl_map\hatching_fit_multiple_cohorts"
-        Obs_data_dir = r"C:\git\longfin_trawl_map\SLS"
+        Pred_data_dir = r"C:\git\longfin_trawl_map\4-16-2019\alpha3"
+        Obs_data_dir = r"C:\git\longfin_trawl_map\4-16-2019\SLS\SLS"
         Pred_data = ["quantiles_1.csv",
                      "quantiles_2.csv",
                      "quantiles_3.csv",
                      "quantiles_4.csv",
                      "quantiles_5.csv",
                      "quantiles_6.csv"]
-        Obs_data = ['SLS_quantiles_4mm-8mm_2012-12-21_grow0.20_2013.csv', 
-                    'SLS_quantiles_4mm-8mm_2013-01-03_grow0.20_2013.csv',
-                    "SLS_quantiles_4mm-8mm_2013-01-15_grow0.20_2013.csv",
-                    "SLS_quantiles_4mm-8mm_2013-01-29_grow0.20_2013.csv",
-                    "SLS_quantiles_4mm-8mm_2013-02-12_grow0.20_2013.csv",
-                    "SLS_quantiles_4mm-8mm_2013-02-26_grow0.20_2013.csv"]
+        Obs_data  = ["SLS_quantiles_4mm-7mm_2012-12-13_grow0.20_2013.csv",
+                     "SLS_quantiles_4mm-7mm_2012-12-28_grow0.20_2013.csv",
+                     "SLS_quantiles_4mm-7mm_2013-01-12_grow0.20_2013.csv",
+                     "SLS_quantiles_4mm-7mm_2013-01-27_grow0.20_2013.csv",
+                     "SLS_quantiles_4mm-7mm_2013-02-11_grow0.20_2013.csv",
+                     "SLS_quantiles_4mm-7mm_2013-02-26_grow0.20_2013.csv",
+                     "SLS_quantiles_4mm-7mm_2013-03-13_grow0.20_2013.csv"]
         Chron_data = [r"J:\Longfin\bar_plots\SLS_trawl_summary.csv"]
-        sizes = [4,8]
-        surveys = [1,2,3,4,5,6]
+        sizes = [4,7]
+        surveys = [1,2,3,4,5,6,7]
          
         lfp = LongfinPlotter(run_dir, grd_file, year, sizes, surveys)
          
-        lfp.make_PredvsObs_BoxWhisker(Obs_data_dir, Pred_data_dir, Obs_data, Pred_data, Chron_data, Var, Log=True)
+        lfp.make_PredvsObs_BoxWhisker(Obs_data_dir, Pred_data_dir, Obs_data, Pred_data, Chron_data, Var, Log=False)
 
     if pvo_boxw_Total:
         Var = 'Abundance'
@@ -464,7 +469,7 @@ if __name__ == '__main__':
         Var = 'Larvae'
         sizes=[]
         surveys = [1,2,3,4,5,6,7]
-        entrainment_files = r"C:\git\longfin_trawl_map\4-16-2019\hatching_fit_15day_cohorts\proportional_entrainment.csv"
+        entrainment_files = r"C:\git\longfin_trawl_map\4-16-2019\alpha3\proportional_entrainment.csv"
         lfp = LongfinPlotter(run_dir, grd_file, year, sizes, surveys)
-        lfp.make_TimeSeries_Plots(entrainment_files, datatype='entrainment')
+        lfp.make_TimeSeries_Plots(entrainment_files, datatype='entrainment', max=.4)
                              
