@@ -167,7 +167,7 @@ class LongfinMap(object):
     
         counted_Surveys = []
         for index, row in DataFrame.iterrows():
-            if self.datatype == 'hatch' or self.datatype == 'entrainment':
+            if self.datatype in ['hatch', 'entrainment', 'fractional_entrainment']:
                 if self.plotType == 'timeseries':
                     survey = row['Survey']
                 else:
@@ -200,7 +200,7 @@ class LongfinMap(object):
                 plot_Legend.append('20mm {0}'.format(int(survey)))
             elif 'computed' == source.lower():
                 plot_Legend.append('Computed'.format(int(survey)))
-            elif self.datatype == 'hatch' or self.datatype == 'entrainment':
+            elif self.datatype in ['hatch', 'entrainment', 'fractional_entrainment']:
                 plot_Legend.append(int(survey))
             else:
                 if source not in unknown_Sources.keys():
@@ -249,6 +249,7 @@ class LongfinMap(object):
         for idx, row in dataFrame.iterrows():
             if row['Values'] != None:
                 return len(row['Values'])
+            
     
     def _make_Legend_Data(self, num_Surveys, Plot_Maximum):
         '''
@@ -329,13 +330,11 @@ class LongfinMap(object):
             
         ax.set_xticks(xticks)
         if self.datatype in ['hatch', 'entrainment']:
-            if self.plotType == 'timeseries':
-                print 'entrainment TS, no xtick labels'
-            else:
-                ax.set_xticklabels(Labels,ha='center',fontsize=8)
-
+            ax.set_xticklabels(Labels,ha='center',fontsize=8)
+            
         elif self.datatype in [None, 'cohort']:
             ax.set_xticklabels(Labels,rotation=90,ha='center',fontsize=8)
+            
         
         if self.Log:
             plot_minimum = 1000. if Plot_maximum > 10000 else 1.
@@ -345,14 +344,15 @@ class LongfinMap(object):
         else:
             ax.set_yticks([0, Plot_maximum])
             ax.ticklabel_format(style='sci', axis='y', scilimits=(-2,2))
-        if self.datatype == 'hatch' or self.datatype == 'entrainment':
-            if self.plotType == 'timeseries':
-                ax.set_xlabel('Days Since Hatch')
-                ax.set_ylabel('Proportional Larvae')
-            else:
-                ax.set_xlabel('Cohort')
-                ax.set_ylabel('Larvae')
-        ax.set_ylabel(Var)
+        if self.datatype in ['hatch', 'entrainment']:
+            ax.set_xlabel('Cohort')
+            ax.set_ylabel('Larvae')
+        if self.datatype in ['fractional_entrainment']:
+            ax.set_xlabel('Calendar Time')
+            ax.set_ylabel('Fraction Entrained')
+        else:
+            ax.set_ylabel(Var)
+        
         
     def _configure_Subplot(self, ax, Plot_maximum):
         '''
@@ -411,7 +411,7 @@ class LongfinMap(object):
         '''
         Adds the Legend subplot and arranges the data.
         '''
-        if self.datatype == 'hatch' or self.datatype == 'entrainment':
+        if self.datatype in ['hatch', 'entrainment', 'fractional_entrainment']:
             cmap_pars = pylab.cm.get_cmap('winter')
             colors=[cmap_pars(float(ng)/float(len(data))) for ng in range(len(data))]
         else:
@@ -478,9 +478,13 @@ class LongfinMap(object):
         plot_Legend_labels = self._get_Plot_Legend_labels(Surveys)
         
         mod = self._get_Legend_size_Modifier(DataFrame, Var)
-        boxsize = [20000.,20000.]
-        new_xy_leg = [self.xy_leg[0] + (boxsize[1]/2), self.xy_leg[1] - (boxsize[1]/2)]
-        fig_coords = self._get_Fig_Coordinates(fig, ax, new_xy_leg, boxsize, mod=mod)
+        if self.datatype in ['fractional_entrainment']:
+            boxsize = [15000.,15000.]
+            new_xy_leg = [self.xy_leg[0] + (boxsize[1]/2), self.xy_leg[1] - (boxsize[1]/2)]
+            fig_coords = self._get_Fig_Coordinates(fig, ax, new_xy_leg, boxsize, mod=mod)
+        else:
+            fig_coords = self._get_Fig_Coordinates(fig, ax, self.xy_leg, boxsize, mod=mod)
+        
         axb = fig.add_axes(Bbox(fig_coords))
         
         legend_data = self._make_Legend_Data(len(plot_Legend_labels), Plot_maximum)
@@ -489,7 +493,8 @@ class LongfinMap(object):
         
         self._configure_Legend(axb, Plot_maximum, plot_Legend_labels, Var)
         
-        self._add_TS_legend_labels(axb, Plot_maximum, plot_Legend_labels, legend_data)
+        if self.datatype in ['fractional_entrainment']:
+            self._add_TS_legend_labels(axb, Plot_maximum, plot_Legend_labels, legend_data)
 
     def _add_StartDate_Text(self, ax):
         '''
@@ -520,7 +525,7 @@ class LongfinMap(object):
         Then adds red 'x' labels for missing data.
         Subplot is then configured to look pretty.
         '''
-        if self.datatype in ['hatch', 'entrainment']:
+        if self.datatype in ['hatch', 'entrainment', 'fractional_entrainment']:
             cmap_pars = pylab.cm.get_cmap('winter')
             colors=[cmap_pars(float(ng)/float(len(DataFrame['Survey']))) for ng in range(len(DataFrame['Survey']))]
         elif self.datatype in ['multipredicted']:
@@ -698,6 +703,8 @@ class LongfinMap(object):
             title = 'Longfin Smelt Hatching'
         elif self.datatype == 'entrainment':
             title = 'Longfin Smelt Entrainment'
+        elif self.datatype == 'fractional_entrainment':
+            title = 'Longfin Smelt Fractional Entrainment'
         elif self.datatype == 'cohort':
             title = 'Longfin Smelt Cohort {0}'.format(self.Cohort_Number)
         else:
@@ -729,7 +736,7 @@ class LongfinMap(object):
             os.mkdir(r'Plots')
         if self.datatype == None:
             filename = '{0}_{1}_Size_{2}mm-{3}mm_{4}'.format(self.Year, self.plotType, self.Sizes[0], self.Sizes[1], Var)
-        elif self.datatype in ['hatch', 'entrainment']:
+        elif self.datatype in ['hatch', 'entrainment', 'fractional_entrainment']:
             filename = '{0}_{1}_{2}_{3}'.format(self.Year, self.plotType, Var, self.datatype.title())
         elif self.datatype in ['cohort']:
             filename = '{0}_{1}_Size_{2}mm-{3}mm_{4}_Cohort{5}'.format(self.Year, self.plotType, self.Sizes[0], self.Sizes[1], Var, self.Cohort_Number)
