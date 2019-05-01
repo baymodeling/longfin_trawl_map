@@ -472,5 +472,5 @@ if __name__ == '__main__':
         surveys = [1,2,3,4,5,6]
         entrainment_files = r"C:\git\longfin_trawl_map\4-16-2019\alpha3\proportional_entrainment.csv"
         lfp = LongfinPlotter(run_dir, grd_file, year, sizes, surveys)
-        lfp.make_TimeSeries_Plots(entrainment_files, datatype='fractional_entrainment', max=1.)
+        lfp.make_TimeSeries_Plots(entrainment_files, Var, datatype='fractional_entrainment', max=1.)
                              
