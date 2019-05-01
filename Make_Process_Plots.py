@@ -64,7 +64,7 @@ print 'Now Creating Timeseries Plots'
 Var = 'Larvae'
 entrainment_file = os.path.join(Pred_data_dir, prop_entrainment_file)
 lfp = LongfinPlotter(run_dir, grd_file, year, sizes, surveys)
-lfp.make_TimeSeries_Plots(entrainment_file, datatype='entrainment', max=.4)
+lfp.make_TimeSeries_Plots(entrainment_file, datatype='fractional_entrainment', max=.4)
 
 print 'Now Creating Total Pred vs Obs'
 Var = 'Abundance'
