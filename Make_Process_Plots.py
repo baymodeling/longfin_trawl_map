@@ -40,7 +40,14 @@ run_dir = r'J:\Longfin\bar_plots\FISH_PTM'
 grd_file = os.path.join(run_dir, 'ptm.grd')
 
 log = False
-chronological = True
+chronological = False
+
+print 'Now Creating Obs tot Box Whisker Plots'
+Var = 'Abundance'
+total_obs_file = os.path.join(Obs_data_dir, total_obs_data)
+lfp = LongfinPlotter(run_dir, grd_file, year, sizes, surveys)
+lfp.make_BoxWhisker(total_obs_file, Var, Log=log)
+
 
 print 'Now Creating Hatching Plot...'
 Var = 'Larvae'
