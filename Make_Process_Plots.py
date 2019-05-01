@@ -41,7 +41,7 @@ grd_file = os.path.join(run_dir, 'ptm.grd')
 
 log = False
 chronological = True
-
+'''
 print 'Now Creating Hatching Plot...'
 Var = 'Larvae'
 lfp = LongfinPlotter(run_dir, grd_file, year, sizes, surveys)
@@ -59,12 +59,12 @@ print 'Now Creating Pred vs Obs'
 lfp = LongfinPlotter(run_dir, grd_file, year, sizes, surveys)     
 lfp.make_PredvsObs_BoxWhisker(Obs_data_dir, Pred_data_dir, Obs_Cohort_Data, predicted_data, chronological_data, 
                               Var, Log=log, datatype='condensed_predicted',max=5000000000.)
-
+'''
 print 'Now Creating Timeseries Plots'
 Var = 'Larvae'
 entrainment_file = os.path.join(Pred_data_dir, prop_entrainment_file)
 lfp = LongfinPlotter(run_dir, grd_file, year, sizes, surveys)
-lfp.make_TimeSeries_Plots(entrainment_file, datatype='fractional_entrainment', max=.4)
+lfp.make_TimeSeries_Plots(entrainment_file, Var, datatype='fractional_entrainment', max=.4)
 
 print 'Now Creating Total Pred vs Obs'
 Var = 'Abundance'

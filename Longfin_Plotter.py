@@ -328,6 +328,7 @@ class LongfinPlotter(object):
 
     def make_TimeSeries_Plots(self,
                               Datafile,
+                              Var,
                               Log=False,
                               datatype=None,
                               max=0.):
