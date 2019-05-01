@@ -173,7 +173,7 @@ class LongfinPlotter(object):
             
             for i, Cohort in enumerate(Cohorts):
                 Obs_data_file = os.path.join(Observed_Data_Dir, Obs_data_list[i])
-                Cohorts = range(Cohorts, Cohorts[-1]+1)
+                Cohorts = range(Cohort, Cohorts[-1]+1)
                 Obs_data_Manager = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, self.Surveys, 'Boxwhisker', '')
                 Obs_data_Manager.InitializeData(Obs_data_file)
                 Obs_data_Manager.get_Dates(Chronological_data)
