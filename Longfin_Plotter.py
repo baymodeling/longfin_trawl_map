@@ -335,8 +335,9 @@ class LongfinPlotter(object):
 
         data = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, self.Surveys, 'timeseries', '')
         data.InitializeData(Datafile)
-        data = data.get_DataFrame()
-        self.Map_Utils.plot_timeseries(data, Var, Log, datatype=datatype, max=max)
+        tsdata = data.get_DataFrame()
+        date_data = data._get_Timeseries_Dates()
+        self.Map_Utils.plot_timeseries(tsdata, Var, date_data, Log, datatype=datatype, max=max)
         self.Map_Utils.savePlot(Var)
 
 ############################################################################
@@ -348,8 +349,8 @@ if __name__ == '__main__':
     bar = False
     box = False
     pvo_boxw = False
-    pvo_boxw_Total = False
-    hatch = True
+    pvo_boxw_Total = True
+    hatch = False
     entrainment = False
     PredvsMultiObs = False
     CohortBW = False
@@ -406,12 +407,12 @@ if __name__ == '__main__':
 
     if pvo_boxw_Total:
         Var = 'Abundance'
-        Pred_data_dir = r"C:\git\longfin_trawl_map\4-11-2019"
-        Obs_data_dir = r"C:\git\longfin_trawl_map\4-11-2019"
+        Pred_data_dir = r"C:\git\longfin_trawl_map\4-16-2019"
+        Obs_data_dir = r"C:\git\longfin_trawl_map\4-16-2019"
         Pred_data = ["tot_quantiles.csv"]
-        Obs_data = ["SLS_quantiles_3mm-11mm_2013.csv"]
+        Obs_data = ["SLS_quantiles_3mm-18mm_2013.csv"]
         Chron_data = [r"J:\Longfin\bar_plots\SLS_trawl_summary.csv"]
-        sizes = [3,11]
+        sizes = [3,18]
         surveys = [1,2,3,4,5,6]
          
         lfp = LongfinPlotter(run_dir, grd_file, year, sizes, surveys)
@@ -470,7 +471,7 @@ if __name__ == '__main__':
         Var = 'Larvae'
         sizes=[]
         surveys = [1,2,3,4,5,6]
-        entrainment_files = r"C:\git\longfin_trawl_map\4-16-2019\alpha3\proportional_entrainment.csv"
+        entrainment_files = r"C:\git\longfin_trawl_map\4-16-2019\proportional_entrainment.csv"
         lfp = LongfinPlotter(run_dir, grd_file, year, sizes, surveys)
         lfp.make_TimeSeries_Plots(entrainment_files, Var, datatype='fractional_entrainment', max=1.)
                              

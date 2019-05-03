@@ -45,7 +45,7 @@ class DataManager(object):
         elif self.plottype == 'boxwhisker':
             self.mainDataFrame = pd.DataFrame(columns=['Region', 'Survey', 'Source', 'LoadOrder', 'q5', 'q25', 'q50', 'q75', 'q95']) 
         elif self.plottype == 'timeseries':
-            self.mainDataFrame = pd.DataFrame(columns=['Region', 'Survey', 'Source', 'LoadOrder', 'Values'])
+            self.mainDataFrame = pd.DataFrame(columns=['Region', 'Survey', 'Source', 'LoadOrder', 'Values', 'Days'])
         print 'Main Data Frame initialized...'
         
     def _append_mainDataframe(self, **kwargs):
@@ -349,7 +349,20 @@ class DataManager(object):
         
         return q5,q25,q50,q75,q95
         
+    
+    def _get_Timeseries_Dates(self): 
+            
+        converted_datestr = []
+        for date in self.Trawl_Data['date_string'].tolist():
+            try:
+                date_string = dt.datetime(1970,1,1) + dt.timedelta(days=int(date))
+            except KeyError:
+                date_string = dt.datetime(1970,1,1)
+            converted_datestr.append(date_string)
         
+        return converted_datestr
+
+   
     def _check_surveyLength(self, len_DataSources, Surveys):   
         '''
         checks the length of the input surveys. Normally, a list of surveys and list of data sources
@@ -687,6 +700,8 @@ class DataManager(object):
                         ts_data = self._get_Region_Stats(region, survey, datatype=datatype)
                         self._append_mainDataframe(Region=region, Survey=survey, Source=Trawl_Data, LoadOrder=load_order,
                                                    Values=ts_data)
+#             self.mainDataFrame = self.mainDataFrame.append({'Days': date_data}, 
+#                                                             ignore_index=True)
                                                    
 
     def InitializeData(self, Trawl_Data, datatype=None):

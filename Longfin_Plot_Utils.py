@@ -12,6 +12,7 @@ from matplotlib.transforms import Bbox
 import pylab
 import datetime as dt
 from shutil import copyfile
+import matplotlib.dates as mdates
 
 class LongfinMap(object):
     '''
@@ -246,10 +247,10 @@ class LongfinMap(object):
         return mod
     
     def _getNumdays(self, dataFrame):
-        for idx, row in dataFrame.iterrows():
-            if row['Values'] != None:
-                return len(row['Values'])
-            
+#         for idx, row in dataFrame.iterrows():
+#             if row['Values'] != None:
+#                 return len(row['Values'])
+        return len(dataFrame['Days'])    
     
     def _make_Legend_Data(self, num_Surveys, Plot_Maximum):
         '''
@@ -335,6 +336,11 @@ class LongfinMap(object):
         elif self.datatype in [None, 'cohort']:
             ax.set_xticklabels(Labels,rotation=90,ha='center',fontsize=8)
             
+        elif self.datatype in ['fractional_entrainment']:
+#             datefrmt = mdates.DateFormatter('%d %b %Y')
+#             ax.xaxis.set_major_formatter(datefrmt)
+            ax.set_xticklabels(Labels,rotation=90,ha='center', fontsize=8)
+            
         
         if self.Log:
             plot_minimum = 1000. if Plot_maximum > 10000 else 1.
@@ -348,7 +354,7 @@ class LongfinMap(object):
             ax.set_xlabel('Cohort')
             ax.set_ylabel('Larvae')
         if self.datatype in ['fractional_entrainment']:
-            ax.set_xlabel('Calendar Time')
+#             ax.set_xlabel('Calendar Time')
             ax.set_ylabel('Fraction Entrained')
         else:
             ax.set_ylabel(Var)
@@ -466,7 +472,7 @@ class LongfinMap(object):
 #             ax.legend(handles[::-1], labels[::-1], bbox_to_anchor=(1, 0.5), loc='center left', fontsize=len(data), frameon=False)
 
 
-    def _add_Legend(self, fig, ax, boxsize, DataFrame, Var, Plot_maximum):
+    def _add_Legend(self, fig, ax, boxsize, DataFrame, Var, Plot_maximum, dates=None):
         '''
         Creates the Legend plot with dummy data using the plot max.
         Legend plots have a modified box size to make them longer in the event
@@ -491,7 +497,11 @@ class LongfinMap(object):
         
         self._add_Legend_Subplot(axb, legend_data, Var)
         
-        self._configure_Legend(axb, Plot_maximum, plot_Legend_labels, Var)
+        if self.datatype in ['fractional_entrainment']:
+            plot_Legenddate_labels = [dates[0].strftime('%d-%b-%Y'), dates[int(len(dates)/2)].strftime('%d-%b-%Y'), dates[-1].strftime('%d-%b-%Y')]
+            self._configure_Legend(axb, Plot_maximum, plot_Legenddate_labels, Var)
+        else:
+            self._configure_Legend(axb, Plot_maximum, plot_Legend_labels, Var)
         
         if self.datatype in ['fractional_entrainment']:
             self._add_TS_legend_labels(axb, Plot_maximum, plot_Legend_labels, legend_data)
@@ -710,7 +720,8 @@ class LongfinMap(object):
         else:
             title = 'Longfin Smelt {0}mm to {1}mm {2}'.format(self.Sizes[0], self.Sizes[1], Var)
         if self.compare:
-            title += ' Pred Vs Obs Cohort {0}'.format(self.Cohort_Number)
+            if self.Cohort_Number != 'Total':
+                title += ' Pred Vs Obs Cohort {0}'.format(self.Cohort_Number)
         if self.Chronological:
             title += ' Chronological'
         title += ' {0}'.format(self.Year)
@@ -741,7 +752,10 @@ class LongfinMap(object):
         elif self.datatype in ['cohort']:
             filename = '{0}_{1}_Size_{2}mm-{3}mm_{4}_Cohort{5}'.format(self.Year, self.plotType, self.Sizes[0], self.Sizes[1], Var, self.Cohort_Number)
         if self.compare:
-            filename += '_PredVsObs_Cohort{0}'.format(self.Cohort_Number)
+            if self.Cohort_Number == 'Total':
+                filename += '_PredVsObs'
+            else:
+                filename += '_PredVsObs_Cohort{0}'.format(self.Cohort_Number)
         if self.Chronological:
             filename += '_Chronological'
         if self.Log:
@@ -890,7 +904,7 @@ class LongfinMap(object):
             
         self._add_Legend(fig, ax, boxsize, region_data, Var, Plot_maximum)
      
-    def plot_timeseries(self, dataFrame, Var, Log, datatype=None, max=0.):
+    def plot_timeseries(self, dataFrame, Var, date_data, Log, datatype=None, max=0.):
         '''
         Adds subplots for each specified region and adds a new subplot for the data.
         Takes in organized Pandas dataFrame grabs data based on Var.
@@ -927,8 +941,8 @@ class LongfinMap(object):
                 fig.canvas.draw()
             
         print Plot_maximum
-            
-        self._add_Legend(fig, ax, boxsize, region_data, Var, Plot_maximum)
+        
+        self._add_Legend(fig, ax, boxsize, region_data, Var, Plot_maximum, dates=date_data)
           
         
         
