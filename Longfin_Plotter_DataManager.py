@@ -554,26 +554,94 @@ class DataManager(object):
         changed to match the main dataframe. From there, dataframes can be correctly merged.
         '''
         Source_ID = {}
+        apply_to_pred = ''
         for src in self.mainDataFrame['Source'].values:
             if 'sls' in src.lower() and src not in Source_ID.keys():
-                Source_ID['sls'] = src
+                Source_ID[src] = 'sls'
             elif '20mm' in src.lower() and src not in Source_ID.keys():
-                Source_ID['20mm'] = src
-            elif src.lower() not in Source_ID.keys():
-                print 'No identifier for source {0}'.format(os.path.basename(src))
-                unknown_ID = raw_input('Please enter a 3 letter ID found in new data source: ')
-                Source_ID[unknown_ID] = src
+                Source_ID[src] = '20mm'
+            elif src not in Source_ID.keys():
+                print 'No identifier for data source {0}'.format(os.path.basename(src))
+                print 'IDs are used to connect Observed and Predicted data, display chronological data, and display legends. Examples are 20mm and SLS.'
+                unknown_ID = raw_input('Please enter a 3-4 letter ID for new data source: ')
+                apply_to_pred = raw_input('Apply this ID to all Predicted Data? (Y/N): ')
+                while apply_to_pred.lower() not in ['y','n']:
+                    print 'Invalid input. Please use Y or N.'
+                    apply_to_pred = raw_input('Apply this ID to all Predicted Data? (Y/N): ')
+                if apply_to_pred.lower() == 'y':
+                    print 'Applying ID {0} to all predicted data...'.format(unknown_ID)
+                    for src in self.mainDataFrame['Source'].values:
+                        Source_ID[src] = unknown_ID
+                else:
+                    Source_ID[src] = unknown_ID
         
         for index,row in dataframe.iterrows():
             Source = row['Source'].lower()
+            apply_to_obs = ''
             if 'sls' in Source:
-                dataframe.ix[index, 'Source'] = Source_ID['sls']
+                try:
+                    path = Source_ID.keys()[Source_ID.values().index('sls')]
+                    IDval = 'sls'
+                except ValueError:
+                    print 'SLS not found in Observed Source IDs. Use one of the following establish ID\'s or rerun.'
+                    print 'Established ID\'s: {0}'.format(list(dict.fromkeys(Source_ID.values())))
+                    IDval = raw_input('ID Value: ')
+                    while IDval not in list(dict.fromkeys(Source_ID.values())):
+                        print 'Input not in established ID\'s.'
+                        print 'Please enter a source from {0} or restart the script'.format(list(dict.fromkeys(Source_ID.values())))
+                        IDval = raw_input('ID Value: ')
+                    apply_to_obs = raw_input('Apply this ID to all Observed Data? (Y/N): ')
+                    while apply_to_pred.lower() not in ['y','n']:
+                        print 'Invalid input. Please use Y or N.'
+                        apply_to_obs = raw_input('Apply this ID to all Observed Data? (Y/N): ')
+                    if apply_to_obs.lower() == 'y':
+                        print 'Applying ID {0} to all Observed data...'
+                        for index,row in dataframe.iterrows():
+                            if dataframe.ix[index, 'Source'] not in Source_ID.keys()[Source_ID.values().index(IDval)]:
+                                dataframe.ix[index, 'Source'] = Source_ID.keys()[Source_ID.values().index(IDval)]
+                        return dataframe
+                dataframe.ix[index, 'Source'] = Source_ID.keys()[Source_ID.values().index(IDval)] #Source_ID['sls']
+                
             elif '20mm' in Source:
-                dataframe.ix[index, 'Source'] = Source_ID['20mm']
+                try:
+                    path = Source_ID.keys()[Source_ID.values().index('20mm')]
+                    IDval = '20mm'
+                except ValueError:
+                    print 'SLS not found in Observed Source IDs. Use one of the following establish ID\'s or rerun.'
+                    print 'Established ID\'s: {0}'.format(list(dict.fromkeys(Source_ID.values())))
+                    IDval = raw_input('ID Value: ')
+                    while IDval not in list(dict.fromkeys(Source_ID.values())):
+                        print 'Input not in established ID\'s.'
+                        print 'Please enter a source from {0} or restart the script'.format(list(dict.fromkeys(Source_ID.values())))
+                        IDval = raw_input('ID Value: ')
+                    apply_to_obs = raw_input('Apply this ID to all Observed Data? (Y/N): ')
+                    while apply_to_pred.lower() not in ['y','n']:
+                        print 'Invalid input. Please use Y or N.'
+                        apply_to_obs = raw_input('Apply this ID to all Observed Data? (Y/N): ')
+                    if apply_to_obs.lower() == 'y':
+                        print 'Applying ID {0} to all Observed data...'
+                        for index,row in dataframe.iterrows():
+                            if dataframe.ix[index, 'Source'] not in Source_ID.keys()[Source_ID.values().index(IDval)]:
+                                dataframe.ix[index, 'Source'] = Source_ID.keys()[Source_ID.values().index(IDval)]
+                        return dataframe
+                dataframe.ix[index, 'Source'] = Source_ID.keys()[Source_ID.values().index(IDval)] #Source_ID['sls']
+                
             elif src not in Source_ID.keys():
-                print 'No identifier for source {0}'.format(os.path.basename(src))
-                unknown_ID = raw_input('Please enter a data source to be used: ')
-                Source_ID[src] = unknown_ID
+                print 'No identifier for data source {0}'.format(os.path.basename(src))
+                print 'IDs are used to connect Observed and Predicted data, display chronological data, and display legends. Examples are 20mm and SLS.'
+                print 'Existing and suggested IDs include {0}'.format(list(dict.fromkeys(Source_ID.values())))
+                unknown_ID = raw_input('Please enter a 3-4 letter ID for new data source: ')
+                apply_to_pred = raw_input('Apply this ID to all Observed Data? (Y/N): ')
+                while apply_to_pred.lower() not in ['y','n']:
+                    print 'Invalid input. Please use Y or N.'
+                    apply_to_pred = raw_input('Apply this ID to all Observed Data? (Y/N): ')
+                if apply_to_pred.lower() == 'y':
+                    print 'Applying ID {0} to all Observed data...'
+                    for index,row in dataframe.iterrows():
+                        dataframe.ix[index, 'Source'] = Source_ID.keys()[Source_ID.values().index(unknown_ID)]
+                    return dataframe
+                else:
+                    dataframe.ix[index, 'Source'] = Source_ID.keys()[Source_ID.values().index(unknown_ID)]
                 
         return dataframe
    
