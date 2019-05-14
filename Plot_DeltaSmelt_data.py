@@ -19,14 +19,14 @@ grd_file = os.path.join(run_dir, 'ptm.grd')
 log = False
 chronological = False
 Fishtype='Delta Smelt'
-'''
+
 print 'Now Creating Obs tot Box Whisker Plots'
 Var = 'Abundance'
 sizes = [3,15]
 surveys = [1,2,3,4,5,6,7,8]
 lfp = LongfinPlotter(run_dir, grd_file, year, sizes, surveys=surveys)
 lfp.make_BoxWhisker(datafile, Var, Log=log, Fishtype=Fishtype)
-'''
+
 
 cohort_data_dir = r'C:\git\longfin_trawl_map\5-10-2019\1999_5mm-7mm\1999_5mm-7mm'
 cohort_data = ['dsmelt_quantiles_5mm-7mm_1999-04-01_grow0.30_1999.csv',
