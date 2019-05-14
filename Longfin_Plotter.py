@@ -29,22 +29,35 @@ class LongfinPlotter(object):
     grd_file: Grid file, likely named 'ptm.grd'
     year: Year of the run. currently does not support multiyear data
     sizes: List of the upper and lower bound of the longfin sizes in mm. List is inclusive. ex: [6, 10]
-    surveys: takes in a list of surveys to be used for the plot. Each input data file needs its own list of data,
+    surveys/cohorts: takes in a list of surveys to be used for the plot. Each input data file needs its own list of data,
              aka if there are two input data sources, the surveys list should contain 2 lists (ex [[3,4,5,6], [1,2,3,4,5,6,7,8,9]])
              if there is only one data source, a single list suffices (ex [2,3,4,5])
              If there are multiple data sources and the user inputs a single list (see above), all data sources will
              use the selected surveys.
+             User MUST specify whether they are passing in surveys or passing in cohorts. Most of the time, user will be passing in
+             surveys. The easiest way to tell is to look at the data sources. Depending on the user selection, the headers for
+             the data will be read differently. If an input file says 'survey', pass in surveys.
+             Survey/cohorts are converted to 'Groups'. The datatype (survey/cohort) is mantained for reference.
     '''
     def __init__(self,
                  run_dir,
                  grd_file,
                  year,
                  sizes,
-                 surveys):
+                 surveys=None,
+                 cohorts=None):
+        
         self.Year = year
         self.Sizes = sizes
-        self.Surveys= surveys
-        self.Map_Utils = LongfinMap(run_dir, grd_file, self.Year, self.Sizes, self.Surveys) #Create map class object
+        if surveys != None:    
+            self.Group_Type = 'Survey' 
+            self.Groups = surveys
+            self.Map_Utils = LongfinMap(run_dir, grd_file, self.Year, self.Sizes, self.Groups, self.Group_Type) #Create map class object
+            
+        elif cohorts != None:   
+            self.Group_Type = 'Cohort'  
+            self.Groups = cohorts
+            self.Map_Utils = LongfinMap(run_dir, grd_file, self.Year, self.Sizes, self.Groups, self.Group_Type) #Create map class object
         
     
     def make_Bars(self,
@@ -77,12 +90,13 @@ class LongfinPlotter(object):
         Log: Plots data with a log scale instead of a true scale. Can make data with a large variation easier to view. 
         '''
         
-        bar_data = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, self.Surveys, 'Bar', static_volumes, startDate=startDate)
+        bar_data = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, 'Bar', static_volumes, 
+                               self.Groups, self.Group_Type, startDate=startDate)
         bar_data.InitializeData(Trawl_Data)
         bar_data.apply_Growth(GrowthRate)
         bar_data.apply_Chronological(Chronological)
         data = bar_data.get_DataFrame()
-        self.Map_Utils.plot_bars(data, Var, GrowthRate, Chronological, Log, startDate, max=max)
+        self.Map_Utils.plot_bars(data, Var, GrowthRate, Chronological, Log, Fishtype, startDate, max=max)
         self.Map_Utils.savePlot(Var)
         
     
@@ -94,7 +108,8 @@ class LongfinPlotter(object):
                         Chronological_data=[],
                         Log=False,
                         datatype=None,
-                        max=0.):
+                        max=0.,
+                        Fishtype='Longfin Smelt'):
         '''
         Creates boxwhisker plots for properly set up data. Instead of coming from trawl observed data,
         data is post processed into csv files containing the q5, q25, q50, q75, and q95 (q meaning quantile)
@@ -115,13 +130,15 @@ class LongfinPlotter(object):
                        If True, bars are ordered by the survey date, not the load order
         Chronological_data: list set of data to correspond with the trawl data. Only needed if Chronological is passed in as True
         Log: Plots data with a log scale instead of a true scale. Can make data with a large variation easier to view. 
+        Max: set a max value used for plotting. Otherwise use the highest q50 value.
         '''
-        
-        bw_data = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, self.Surveys, 'Boxwhisker', '')
+        bw_data =  DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, 'Boxwhisker', '', 
+                               self.Groups, self.Group_Type)
         bw_data.InitializeData(Trawl_Data, datatype=datatype)
-        bw_data.apply_Chronological(Chronological, Chronological_data=Chronological_data)
+        if self.Groups != None:
+            bw_data.apply_Chronological(Chronological, Chronological_data=Chronological_data)
         data = bw_data.get_DataFrame()
-        self.Map_Utils.plot_boxwhisker(data, Var, Chronological, Log, datatype=datatype, max=max)
+        self.Map_Utils.plot_boxwhisker(data, Var, Chronological, Log, Fishtype, datatype=datatype, max=max)
         self.Map_Utils.savePlot(Var)
     
     
@@ -135,7 +152,9 @@ class LongfinPlotter(object):
                                   Chronological=False,
                                   Log=False,
                                   max=0.,
-                                  datatype=None):
+                                  datatype=None,
+                                  Condensed_Cohorts=None,
+                                  Fishtype='Longfin Smelt'):
         '''
         Creates boxwhisker plots for properly set up data. Instead of coming from trawl observed data,
         data is post processed into csv files containing the q5, q25, q50, q75, and q95 (q meaning quantile)
@@ -153,34 +172,52 @@ class LongfinPlotter(object):
         dates for each survey and region.
         
         Inputs:
-        Trawl_Data: pre processed csv file full path containing data.
+        Observed_Data_Dir: path to directory where observed data exists.
+        Predicted_Data_Dir: path to directory where predicted data exists.
+        Obs_data_list: list of observed data file names. Include full name.
+                        example: ['test1.csv', 'test2.csv']
+        Pred_data_list: list of Predicted data file names. Include full name.
+                        example: ['test1.csv', 'test2.csv']
         Var: plot type variable. Abundance or Density
         Chronological: Boolean to turn on Chronological plotting.
                        If True, bars are ordered by the survey date, not the load order
         Chronological_data: list set of data to correspond with the trawl data. Only needed if Chronological is passed in as True
         Log: Plots data with a log scale instead of a true scale. Can make data with a large variation easier to view. 
+        Max: set a max value used for plotting. Otherwise use the highest q50 value.
+        datatype: if passed in, use "condensed_predicted". Generally, each cohort gets its own datafile. In some cases these cohort files
+                  are aggregated into one single large file. This changes the way that the cohorts are identified and collected.
+                  If the user sets this flag but uses more than 1 file, the script will be exited.
+                  WARNING: this method involves reading in large amounts of data at once. Can run slowly.
         '''
-        Cohorts = self.Surveys #because these are set in a different function, they function about the same
-                                #are renamed here for clarity sake. 
         
         if datatype == 'condensed_predicted':
             if len(Pred_data_list) > 1:
                 print 'too many data files for condensed. Now exiting...'
                 sys.exit(0) 
+            try:
+                print 'Using the following Cohorts: {0}'.format(Condensed_Cohorts)
+            except NameError:
+                print 'Selected Condensed Predicted, but no condensed cohorts selected.'
+                print 'Please rerun script, but pass in Condensed_Cohorts along with a list of cohorts to be plotted.'
+                print 'Now exiting...'
+                sys.exit(0)
+                
             Pred_data_file = os.path.join(Predicted_Data_Dir, Pred_data_list[0])
-            Pred_data_Manager = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, self.Surveys, 'Boxwhisker', '')
+            Pred_data_Manager = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, 'Boxwhisker', '', 
+                                            self.Groups, self.Group_Type)
             Pred_data_Manager.InitializeData(Pred_data_file, datatype='condensed_predicted')
             
-            for i, Cohort in enumerate(Cohorts):
+            for i, Cohort in enumerate(Condensed_Cohorts):
                 Obs_data_file = os.path.join(Observed_Data_Dir, Obs_data_list[i])
-                Cohorts = range(Cohort, Cohorts[-1]+1)
-                Obs_data_Manager = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, self.Surveys, 'Boxwhisker', '')
+                self.Groups = range(i+1, self.Groups[-1]+1)
+                Obs_data_Manager = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, 'Boxwhisker', '', 
+                                               self.Groups, self.Group_Type)
                 Obs_data_Manager.InitializeData(Obs_data_file)
                 Obs_data_Manager.get_Dates(Chronological_data)
                 Obs_data = Obs_data_Manager.get_DataFrame()
-                Avg_Pred_Data = Pred_data_Manager.get_Predicted_Timed_Data(Obs_data, datatype='condense_predicted', cohort=i+1)
+                Avg_Pred_Data = Pred_data_Manager.get_Predicted_Timed_Data(Obs_data, datatype='condensed_predicted')
                 dataframe = Pred_data_Manager.merge_Dataframes(Avg_Pred_Data, Obs_data)
-                self.Map_Utils.plot_ObsVsPred_Boxwhisker(dataframe, Var, Chronological, Cohort, Log, max=max)
+                self.Map_Utils.plot_ObsVsPred_Boxwhisker(dataframe, Var, Chronological, Cohort, Log, Fishtype, max=max)
                 self.Map_Utils.savePlot(Var)
         
         else:
@@ -189,18 +226,19 @@ class LongfinPlotter(object):
                 Pred_data_file = os.path.join(Predicted_Data_Dir, Pred_data)
                 Obs_data_file = os.path.join(Observed_Data_Dir, Obs_data_list[i])
                 print 'Creating Plot for Cohort {0}...'.format(Cohort_num)
-                self.Surveys = range(Cohort_num, self.Surveys[-1]+1)
-                Obs_data_Manager = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, self.Surveys, 'Boxwhisker', '')
+                self.Groups = range(i+1, len(Pred_data_list)+1)
+                Obs_data_Manager = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, 'Boxwhisker', '', 
+                                              self.Groups, self.Group_Type)
+#                 Obs_data_Manager.InitializeData(Obs_data_file, datatype='observed')
                 Obs_data_Manager.InitializeData(Obs_data_file)
-#                 obsstartdate= Obs_data_list[i].split('_')[3]
-#                 obsenddate = Obs_data_list[i].split('_')[3]
                 Obs_data_Manager.get_Dates(Chronological_data)
-                Pred_data_Manager = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, self.Surveys, 'Boxwhisker', '')
+                Pred_data_Manager = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, 'Boxwhisker', '',
+                                                self.Groups, self.Group_Type)
                 Pred_data_Manager.InitializeData(Pred_data_file, datatype='predicted')
                 Obs_data = Obs_data_Manager.get_DataFrame()
                 Avg_Pred_Data = Pred_data_Manager.get_Predicted_Timed_Data(Obs_data)
                 dataframe = Pred_data_Manager.merge_Dataframes(Avg_Pred_Data, Obs_data)
-                self.Map_Utils.plot_ObsVsPred_Boxwhisker(dataframe, Var, Chronological, Cohort_num, Log, max=max)
+                self.Map_Utils.plot_ObsVsPred_Boxwhisker(dataframe, Var, Chronological, Cohort_num, Log, Fishtype, max=max)
                 self.Map_Utils.savePlot(Var)
             
     def make_MultiPredvsObs_BoxWhisker(self,
@@ -212,7 +250,8 @@ class LongfinPlotter(object):
                                   Var,
                                   Chronological=False,
                                   Log=False,
-                                  max=0.):
+                                  max=0.,
+                                  Fishtype='Longfin Smelt'):
         '''
         Creates boxwhisker plots for properly set up data. Instead of coming from trawl observed data,
         data is post processed into csv files containing the q5, q25, q50, q75, and q95 (q meaning quantile)
@@ -223,34 +262,44 @@ class LongfinPlotter(object):
         q75 = 75% quantile, top of the box
         q95 = 95% quantile, top whisker
         
-        The Data acts as a direct comparison of Observed data from collected surveys to computed values.
+        Plots multiple predicted data vs a single observed record. 
+        This plot can be very busy with too many groups.
         
+        The Data acts as a direct comparison of Observed data from collected surveys to computed values.
         
         variable controls including chronological and Log scaling. If Chronological, user must include a pairing trawl csv file that contains
         dates for each survey and region.
         
         Inputs:
-        Trawl_Data: pre processed csv file full path containing data.
+        Observed_Data_Dir: path to directory where observed data exists.
+        Predicted_Data_Dir: path to directory where predicted data exists.
+        Obs_data_list: list of observed data file names. Include full name.
+                        example: ['test1.csv', 'test2.csv']
+        Pred_data_list: list of Predicted data file names. Include full name.
+                        example: ['test1.csv', 'test2.csv']
         Var: plot type variable. Abundance or Density
         Chronological: Boolean to turn on Chronological plotting.
                        If True, bars are ordered by the survey date, not the load order
         Chronological_data: list set of data to correspond with the trawl data. Only needed if Chronological is passed in as True
         Log: Plots data with a log scale instead of a true scale. Can make data with a large variation easier to view. 
+        Max: set a max value used for plotting. Otherwise use the highest q50 value.
         '''
-        cur_Dir = os.getcwd()
-        Pred_data_Manager = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, self.Surveys, 'Boxwhisker', '')
+
+        Pred_data_Manager = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, 'Boxwhisker', '',
+                                        self.Groups, self.Group_Type)
         os.chdir(Predicted_Data_Dir)
         Pred_data_Manager.InitializeData(Pred_data_list, datatype='multipredicted')
         Pred_data_Manager.apply_Chronological(Chronological, Chronological_data=Chronological_data)
         os.chdir(Observed_Data_Dir)
-        Obs_data_Manager = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, self.Surveys, 'Boxwhisker', '')
+        Obs_data_Manager = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, 'Boxwhisker', '', 
+                                       self.Groups, self.Group_Type)
         Obs_data_Manager.InitializeData(Obs_data_list)
         Obs_data_Manager.get_Dates(Chronological_data)
         Obs_data = Obs_data_Manager.get_DataFrame()
         
         Avg_Pred_Data = Pred_data_Manager.get_Predicted_Timed_Data(Obs_data, datatype='multipredicted')
         dataframe = Pred_data_Manager.merge_Dataframes(Avg_Pred_Data, Obs_data)
-        self.Map_Utils.plot_ObsVsPred_Boxwhisker(dataframe, Var, Chronological, 'Total', Log, datatype='multipredicted', max=max)
+        self.Map_Utils.plot_ObsVsPred_Boxwhisker(dataframe, Var, Chronological, 'Total', Log, Fishtype, datatype='multipredicted', max=max)
         self.Map_Utils.savePlot(Var)
         
 
@@ -264,7 +313,8 @@ class LongfinPlotter(object):
                               Var,
                               Chronological=False,
                               Log=False,
-                              max=0.):
+                              max=0.,
+                              Fishtype='Longfin Smelt'):
         '''
         Creates boxwhisker plots for properly set up data. Instead of coming from trawl observed data,
         data is post processed into csv files containing the q5, q25, q50, q75, and q95 (q meaning quantile)
@@ -282,20 +332,28 @@ class LongfinPlotter(object):
         dates for each survey and region.
         
         Inputs:
-        Trawl_Data: pre processed csv file full path containing data.
+        Observed_Data_Dir: path to directory where observed data exists.
+        Predicted_Data_Dir: path to directory where predicted data exists.
+        Obs_data_list: list of observed data file names. Include full name.
+                        example: ['test1.csv', 'test2.csv']
+        Pred_data_list: list of Predicted data file names. Include full name.
+                        example: ['test1.csv', 'test2.csv']
         Var: plot type variable. Abundance or Density
         Chronological: Boolean to turn on Chronological plotting.
                        If True, bars are ordered by the survey date, not the load order
         Chronological_data: list set of data to correspond with the trawl data. Only needed if Chronological is passed in as True
         Log: Plots data with a log scale instead of a true scale. Can make data with a large variation easier to view. 
+        Max: set a max value used for plotting. Otherwise use the highest q50 value.        
         '''
-        Obs_data_Manager = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, self.Surveys, 'Boxwhisker', '')
+        Obs_data_Manager = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, 'Boxwhisker', '', 
+                                       self.Groups, self.Group_Type)
 #         Obs_data_Manager.InitializeData(Obs_data)
         for i, Obs_data in enumerate(Obs_data_list):
             Obs_data_file = os.path.join(Obs_Data_Dir, Obs_data)
             Obs_data_Manager.InitializeData(Obs_data_file)
         Obs_data_Manager.get_Dates(Chronological_data)
-        Pred_data_Manager = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, self.Surveys, 'Boxwhisker', '')
+        Pred_data_Manager = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, 'Boxwhisker', '', 
+                                        self.Groups, self.Group_Type)
         for i, Pred_data in enumerate(Pred_data_list):
             Pred_data_file = os.path.join(Predicted_Data_Dir, Pred_data)
             Pred_data_Manager.InitializeData(Pred_data_file, datatype='predicted')
@@ -303,7 +361,7 @@ class LongfinPlotter(object):
         Obs_data = Obs_data_Manager.get_DataFrame()
         Avg_Pred_Data = Pred_data_Manager.get_Predicted_Timed_Data(Obs_data, datatype='total')
         dataframe = Pred_data_Manager.merge_Dataframes(Avg_Pred_Data, Obs_data)
-        self.Map_Utils.plot_ObsVsPred_Boxwhisker(dataframe, Var, Chronological, 'Total', Log, max=max)
+        self.Map_Utils.plot_ObsVsPred_Boxwhisker(dataframe, Var, Chronological, 'Total', Log, Fishtype, max=max)
         self.Map_Utils.savePlot(Var)
         
     def make_Cohort_BoxWhisker(self,
@@ -312,17 +370,49 @@ class LongfinPlotter(object):
                               Var,
                               Log=False,
                               datatype=None,
-                              max=0.):
-        cohorts = self.Surveys
-        for cohort in cohorts:
+                              max=0.,
+                              Fishtype='Longfin Smelt'):
+        '''
+        UNDER CONSTRUCTION DO NOT USE
+        
+        Creates boxwhisker plots for properly set up data. Instead of coming from trawl observed data,
+        data is post processed into csv files containing the q5, q25, q50, q75, and q95 (q meaning quantile)
+        statistics. These values are used for creating boxwhisker plots.
+        q5 = 5% quantile, bottom whisker
+        q25 = 25% quantile, bottom of the box
+        q50 = 50% quantile, middle of the box
+        q75 = 75% quantile, top of the box
+        q95 = 95% quantile, top whisker
+        
+        The Data acts as a direct comparison of Observed data from collected surveys to computed values.
+        
+        
+        variable controls including chronological and Log scaling. If Chronological, user must include a pairing trawl csv file that contains
+        dates for each survey and region.
+        
+        Inputs:
+        Data_Dir: path to directory where data exists.
+        data_files: list of data file names. Include full name.
+                        example: ['test1.csv', 'test2.csv']
+        Var: plot type variable. Abundance or Density
+        Chronological: Boolean to turn on Chronological plotting.
+                       If True, bars are ordered by the survey date, not the load order
+        Chronological_data: list set of data to correspond with the trawl data. Only needed if Chronological is passed in as True
+        Log: Plots data with a log scale instead of a true scale. Can make data with a large variation easier to view. 
+        Cohorts: number of cohorts to use. Maybe use list of data sources?
+        Max: set a max value used for plotting. Otherwise use the highest q50 value.
+        '''
+#         cohorts = self.Surveys
+        for i, cohort_file in enumerate(data_files):
+            cohort = i+1
             print 'Creating Plot for Cohort {0}...'.format(cohort)
-            self.Surveys = range(cohort, self.Surveys[-1]+1)
-            bw_data = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, self.Surveys, 'Boxwhisker', '')
-            for datafile in data_files:
-                Trawl_Data = os.path.join(Data_dir, datafile)
-                bw_data.InitializeData(Trawl_Data)
+            self.Groups = range(cohort, self.Groups[-1]+1)
+            bw_data = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, 'Boxwhisker', '', 
+                                  self.Groups, self.Group_Type)
+            Trawl_Data = os.path.join(Data_dir, cohort_file)
+            bw_data.InitializeData(Trawl_Data)
             data = bw_data.get_DataFrame()
-            self.Map_Utils.plot_boxwhisker(data, Var, '', Log, datatype=datatype, cohortNum=cohort, max=max)
+            self.Map_Utils.plot_boxwhisker(data, Var, '', Log, Fishtype, datatype=datatype, cohortNum=cohort, max=max)
             self.Map_Utils.savePlot(Var)
 
 
@@ -330,14 +420,31 @@ class LongfinPlotter(object):
                               Datafile,
                               Var,
                               Log=False,
-                              datatype=None,
-                              max=0.):
-
-        data = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, self.Surveys, 'timeseries', '')
+                              datatype='fractional_entrainment',
+                              max=0.,
+                              Fishtype='Longfin Smelt'):
+        '''
+        Creates a timeseries plot for properly set up data. At each location, cohort data is displayed over time. 
+        Each cohort is represented as a line of varying color. The x axis represents time, while the y axis
+        represents the variable. Areas with no data are not given a plot.
+        
+        datafile is traditionally set up with columns being 'REGION_COHORT', and days since hatching.
+        
+        Inputs:
+        Datafile: full path to file containing data for the time series
+        Var: plot type variable. Abundance or Density
+        Log: when passed in true, use a log scale to plot. False by default. 
+        datatype: used to specify different type of data. set to 'fractional_entrainment' by default.
+                  fractional_entrainment is used if the data values are percents (i.e. 0-1)
+                  more datatypes available at a later date.
+        Max: set a max value used for plotting. Otherwise use the highest value.
+        '''
+        data = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, 'timeseries', '', 
+                           self.Groups, self.Group_Type)
         data.InitializeData(Datafile)
         tsdata = data.get_DataFrame()
         date_data = data._get_Timeseries_Dates()
-        self.Map_Utils.plot_timeseries(tsdata, Var, date_data, Log, datatype=datatype, max=max)
+        self.Map_Utils.plot_timeseries(tsdata, Var, date_data, Log, Fishtype, datatype=datatype, max=max)
         self.Map_Utils.savePlot(Var)
 
 ############################################################################
@@ -348,12 +455,12 @@ if __name__ == '__main__':
     year = 2013
     bar = False
     box = False
-    pvo_boxw = False
-    pvo_boxw_Total = True
+    pvo_boxw = True
+    pvo_boxw_Total = False
     hatch = False
     entrainment = False
     PredvsMultiObs = False
-    CohortBW = False
+    CohortBW = False #UNDER CONSTRUCTION
     EntrainmentTS = False
     
     if bar:
@@ -365,9 +472,9 @@ if __name__ == '__main__':
         sizes = [6, 10]
         surveys = [[3,4,5,6], [1,2,3,4,5,6,7,8,9]]
          
-        lfp = LongfinPlotter(run_dir, grd_file, year, sizes, surveys)
+        lfp = LongfinPlotter(run_dir, grd_file, year, sizes, surveys=surveys)
          
-        lfp.make_Bars(trawl_data,static_volumes, Var, GrowthRate=.2, Chronological=True, Log=True)
+        lfp.make_Bars(trawl_data,static_volumes, Var, GrowthRate=0.2, Chronological=False, Log=True)
         
     if box:
         Var = 'Abundance'
@@ -376,34 +483,37 @@ if __name__ == '__main__':
         sizes = [12,16]
         surveys = [[1,2,3,4,5,6], [1,2,3,4,5,6,7,8,9]]
          
-        lfp = LongfinPlotter(run_dir, grd_file, year, sizes, surveys)
+        lfp = LongfinPlotter(run_dir, grd_file, year, sizes, surveys=surveys)
          
         lfp.make_BoxWhisker(trawl_data, Var, Chronological=True, Chronological_data=Chron_data, Log=True)
         
     if pvo_boxw:
         Var = 'Abundance'
-        Pred_data_dir = r"C:\git\longfin_trawl_map\4-16-2019\alpha3"
-        Obs_data_dir = r"C:\git\longfin_trawl_map\4-16-2019\SLS\SLS"
-        Pred_data = ["quantiles_1.csv",
-                     "quantiles_2.csv",
-                     "quantiles_3.csv",
-                     "quantiles_4.csv",
-                     "quantiles_5.csv",
-                     "quantiles_6.csv"]
-        Obs_data  = ["SLS_quantiles_4mm-7mm_2012-12-13_grow0.20_2013.csv",
-                     "SLS_quantiles_4mm-7mm_2012-12-28_grow0.20_2013.csv",
-                     "SLS_quantiles_4mm-7mm_2013-01-12_grow0.20_2013.csv",
-                     "SLS_quantiles_4mm-7mm_2013-01-27_grow0.20_2013.csv",
-                     "SLS_quantiles_4mm-7mm_2013-02-11_grow0.20_2013.csv",
-                     "SLS_quantiles_4mm-7mm_2013-02-26_grow0.20_2013.csv",
-                     "SLS_quantiles_4mm-7mm_2013-03-13_grow0.20_2013.csv"]
+        Pred_data_dir = r"C:\git\longfin_trawl_map\4-16-2019\Test"
+        Obs_data_dir = r"C:\git\longfin_trawl_map\4-16-2019\Test"
+#         Pred_data = ["quantiles_1.csv",
+#                      "quantiles_2.csv",
+#                      "quantiles_3.csv",
+#                      "quantiles_4.csv",
+#                      "quantiles_5.csv",
+#                      "quantiles_6.csv"]
+        Pred_data = ['quantiles.csv']
+        Obs_data  = ["Test_quantiles_4mm-7mm_2012-12-13_grow0.20_2013.csv",
+                     "Test_quantiles_4mm-7mm_2012-12-28_grow0.20_2013.csv",
+                     "Test_quantiles_4mm-7mm_2013-01-12_grow0.20_2013.csv",
+                     "Test_quantiles_4mm-7mm_2013-01-27_grow0.20_2013.csv",
+                     "Test_quantiles_4mm-7mm_2013-02-11_grow0.20_2013.csv",
+                     "Test_quantiles_4mm-7mm_2013-02-26_grow0.20_2013.csv",
+                     "Test_quantiles_4mm-7mm_2013-03-13_grow0.20_2013.csv"]
         Chron_data = [r"J:\Longfin\bar_plots\SLS_trawl_summary.csv"]
         sizes = [4,7]
-        surveys = [1,2,3,4,5,6,7]
+        surveys = [1,2,3,4]
+        Condensed_Cohorts = [1,2,3,4]
          
-        lfp = LongfinPlotter(run_dir, grd_file, year, sizes, surveys)
+        lfp = LongfinPlotter(run_dir, grd_file, year, sizes, surveys=surveys)
          
-        lfp.make_PredvsObs_BoxWhisker(Obs_data_dir, Pred_data_dir, Obs_data, Pred_data, Chron_data, Var, Log=False)
+        lfp.make_PredvsObs_BoxWhisker(Obs_data_dir, Pred_data_dir, Obs_data, Pred_data, Chron_data, Var, 
+                                      Log=False, datatype='condensed_predicted', Condensed_Cohorts=Condensed_Cohorts)
 
     if pvo_boxw_Total:
         Var = 'Abundance'
@@ -415,7 +525,7 @@ if __name__ == '__main__':
         sizes = [3,18]
         surveys = [1,2,3,4,5,6]
          
-        lfp = LongfinPlotter(run_dir, grd_file, year, sizes, surveys)
+        lfp = LongfinPlotter(run_dir, grd_file, year, sizes, surveys=surveys)
          
         lfp.make_TotalPredvsObs_BoxWhisker(Pred_data_dir, Obs_data_dir, Pred_data, Obs_data, Chron_data, Var, Log=False)
     
@@ -426,7 +536,7 @@ if __name__ == '__main__':
         sizes = []
         cohorts = [1,2,3,4,5,6,7]
          
-        lfp = LongfinPlotter(run_dir, grd_file, year, sizes, cohorts)
+        lfp = LongfinPlotter(run_dir, grd_file, year, sizes, cohorts=cohorts)
          
         lfp.make_BoxWhisker(trawl_data, Var, Log=False, datatype='hatch', max=5000000000.)
         
@@ -436,7 +546,7 @@ if __name__ == '__main__':
         sizes = []
         cohorts = [1,2,3,4,5,6,7]
          
-        lfp = LongfinPlotter(run_dir, grd_file, year, sizes, cohorts)
+        lfp = LongfinPlotter(run_dir, grd_file, year, sizes, cohorts=cohorts)
          
         lfp.make_BoxWhisker(trawl_data, Var, Log=False, datatype='entrainment',max=20000000.)
         
@@ -452,26 +562,29 @@ if __name__ == '__main__':
         sizes = [3,11]
         surveys = [1,2,3]
         
-        lfp = LongfinPlotter(run_dir, grd_file, year, sizes, surveys)
+        lfp = LongfinPlotter(run_dir, grd_file, year, sizes, surveys=surveys)
         lfp.make_MultiPredvsObs_BoxWhisker(observed_data_dir, predicted_data_dir, Observed_data, predicted_data, Chron_data, Var, Log=True)
          
     if CohortBW:
+        '''
+        UNDER CONSTRUCTION
+        '''
         Obs_data_dir = r"C:\git\longfin_trawl_map\4-16-2019"
         observed_data = ["20mm_quantiles_3mm-18mm_2013.csv"]
         Var = 'Abundance'
         Chron_data = [r"J:\Longfin\bar_plots\SLS_trawl_summary.csv"]
         sizes = [4,7]
-        cohorts = [1,2,3,4,5,6,7]
+        surveys = [1,2,3,4,5,6,7]
+        cohorts = [1,2,3,4,5]
+        lfp = LongfinPlotter(run_dir, grd_file, year, sizes, surveys=surveys)
          
-        lfp = LongfinPlotter(run_dir, grd_file, year, sizes, cohorts)
-         
-        lfp.make_Cohort_BoxWhisker(Obs_data_dir, observed_data, Var, Log=True, datatype='cohort')
+        lfp.make_Cohort_BoxWhisker(Obs_data_dir, observed_data, Var, Log=True)
         
     if EntrainmentTS:
         Var = 'Larvae'
         sizes=[]
-        surveys = [1,2,3,4,5,6]
+        cohorts = [1,2,3,4,5,6]
         entrainment_files = r"C:\git\longfin_trawl_map\4-16-2019\proportional_entrainment.csv"
-        lfp = LongfinPlotter(run_dir, grd_file, year, sizes, surveys)
+        lfp = LongfinPlotter(run_dir, grd_file, year, sizes, cohorts=cohorts)
         lfp.make_TimeSeries_Plots(entrainment_files, Var, datatype='fractional_entrainment', max=1.)
                              
