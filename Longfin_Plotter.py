@@ -53,12 +53,12 @@ class LongfinPlotter(object):
             self.Group_Type = 'Survey' 
             self.Groups = surveys
             self.Map_Utils = LongfinMap(run_dir, grd_file, self.Year, self.Sizes, self.Groups, self.Group_Type) #Create map class object
-            
+            self.Map_Utils.Total_Groups = self.Groups
         elif cohorts != None:   
             self.Group_Type = 'Cohort'  
             self.Groups = cohorts
             self.Map_Utils = LongfinMap(run_dir, grd_file, self.Year, self.Sizes, self.Groups, self.Group_Type) #Create map class object
-        
+            self.Map_Utils.Total_Groups = self.Groups
     
     def make_Bars(self,
                   Trawl_Data,

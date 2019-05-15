@@ -432,11 +432,18 @@ class LongfinMap(object):
         #set up the colors for each group
         if self.datatype in ['hatch', 'entrainment', 'fractional_entrainment']:
             cmap_pars = pylab.cm.get_cmap('winter') #blues
-            colors=[cmap_pars(float(ng)/float(len(data))) for ng in range(len(data))]
+            colors=[cmap_pars(float(ng)/float(len(self.Total_Groups))) for ng in range(len(self.Total_Groups))]
         else:
             cmap_pars = pylab.cm.get_cmap('spring') #purple to yellow
-            colors=[cmap_pars(float(ng)/float(len(data))) for ng in range(len(data))]
-    
+            colors=[cmap_pars(float(ng)/float(len(self.Total_Groups))) for ng in range(len(self.Total_Groups))]
+#         if self.datatype in ['hatch', 'entrainment', 'fractional_entrainment']:
+#             cmap_pars = pylab.cm.get_cmap('winter') #blues
+#             colors=[cmap_pars(float(ng)/float(len(data))) for ng in range(len(data))]
+#         else:
+#             cmap_pars = pylab.cm.get_cmap('spring') #purple to yellow
+#             colors=[cmap_pars(float(ng)/float(len(data))) for ng in range(len(data))]
+        data_diff = len(self.Total_Groups) - len(data)
+        colors = colors[data_diff:]
         
         leg_data = np.asarray(data)
         
@@ -554,14 +561,29 @@ class LongfinMap(object):
         '''
         if self.datatype in ['hatch', 'entrainment', 'fractional_entrainment']:
             cmap_pars = pylab.cm.get_cmap('winter')
-            colors=[cmap_pars(float(ng)/float(len(DataFrame['Group']))) for ng in range(len(DataFrame['Group']))]
+            num_dataset_sources = len(DataFrame['Group'])
+            colors=[cmap_pars(float(ng)/float(len(self.Total_Groups))) for ng in range(len(self.Total_Groups))]
         elif self.datatype in ['multipredicted']:
             cmap_pars = pylab.cm.get_cmap('winter')
             num_dataset_sources = len(list(set(DataFrame['Source'].tolist())))
-            colors=[cmap_pars(float(ng)/float(num_dataset_sources)) for ng in range(num_dataset_sources)]
+            colors=[cmap_pars(float(ng)/float(len(self.Total_Groups))) for ng in range(len(self.Total_Groups))]
         else:
             cmap_pars = pylab.cm.get_cmap('spring')
-            colors=[cmap_pars(float(ng)/float(len(DataFrame['Group']))) for ng in range(len(DataFrame['Group']))]
+            num_dataset_sources = len(DataFrame['Group'])
+            colors=[cmap_pars(float(ng)/float(len(self.Total_Groups))) for ng in range(len(self.Total_Groups))]
+#         if self.datatype in ['hatch', 'entrainment', 'fractional_entrainment']:
+#             cmap_pars = pylab.cm.get_cmap('winter')
+#             colors=[cmap_pars(float(ng)/float(len(DataFrame['Group']))) for ng in range(len(DataFrame['Group']))]
+#         elif self.datatype in ['multipredicted']:
+#             cmap_pars = pylab.cm.get_cmap('winter')
+#             num_dataset_sources = len(list(set(DataFrame['Source'].tolist())))
+#             colors=[cmap_pars(float(ng)/float(num_dataset_sources)) for ng in range(num_dataset_sources)]
+#         else:
+#             cmap_pars = pylab.cm.get_cmap('spring')
+#             colors=[cmap_pars(float(ng)/float(len(DataFrame['Group']))) for ng in range(len(DataFrame['Group']))]
+        
+        data_diff = len(self.Total_Groups) - num_dataset_sources
+        colors = colors[data_diff:]
         
         plt_pos = np.arange(len(DataFrame))
         

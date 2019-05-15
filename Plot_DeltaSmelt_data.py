@@ -38,7 +38,7 @@ cohort_data = ['dsmelt_quantiles_5mm-7mm_1999-04-01_grow0.30_1999.csv',
                ]
 
 sizes = [5,7]
-surveys = [1,2,3,4,5,6]
+surveys = [1,2,3,4,5,6,7,8]
 lfp = LongfinPlotter(run_dir, grd_file, year, sizes, surveys=surveys)
 
 lfp.make_Cohort_BoxWhisker(cohort_data_dir, cohort_data, Var, Log=log, 
