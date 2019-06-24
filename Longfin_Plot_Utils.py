@@ -119,7 +119,7 @@ class LongfinMap(object):
         find data for each region plot. Returns list of labels.
         If a survey doesn't have data, a red 'x' is plotted. Else, its blank.
         '''
-        if self.datatype in ['entrainment']:
+        if self.datatype in ['entrainment', 'hatch']:
             Groupings = Filtered_DataFrame['Cohort']
         else:
             Groupings = Filtered_DataFrame['Survey']
@@ -175,7 +175,7 @@ class LongfinMap(object):
     
         counted_Groups = []
         for index, row in DataFrame.iterrows():
-            if self.datatype in ['entrainment']:
+            if self.datatype in ['entrainment', 'hatch']:
                 group = row['Cohort']
             else:
                 group = row['Survey']
@@ -204,7 +204,7 @@ class LongfinMap(object):
             Label = GroupLabel[1]
 #             source = os.path.basename(GroupSource[1])
 
-            if self.datatype in ['entrainment']:                
+            if self.datatype in ['entrainment', 'hatch']:                
                 plot_Legend.append('{0}'.format(int(Group)))
             else:
                 plot_Legend.append('{0} {1}'.format(Label, int(Group)))
@@ -645,7 +645,7 @@ class LongfinMap(object):
         Subplot is then configured to look pretty.
         '''
 #         if self.datatype in ['hatch', 'entrainment', 'fractional_entrainment']:
-        if self.datatype in ['entrainment']:
+        if self.datatype in ['entrainment', 'hatch']:
 #             cmap_pars = pylab.cm.get_cmap('winter')
             num_dataset_sources = len(DataFrame['Cohort'])
 #             self.colors=[cmap_pars(float(ng)/float(self.Total_Groups)) for ng in range(self.Total_Groups)]
@@ -996,7 +996,7 @@ class LongfinMap(object):
         self.Cohort_Number=cohortNum
         self.datatype = datatype
         
-        if self.datatype in ['entrainment']:
+        if self.datatype in ['entrainment', 'hatch']:
             self.Total_Groups = len(dataFrame.Cohort.unique())
         else:
             self.Total_Groups = len(dataFrame.Survey.unique())
@@ -1011,12 +1011,12 @@ class LongfinMap(object):
             Plot_maximum = self._get_Plot_Scale(dataFrame, Var)
         
         if Chronological:
-            if self.datatype in ['entrainment']: 
+            if self.datatype in ['entrainment', 'hatch']: 
                 dataFrame = dataFrame.sort_values(by=['Region', 'LoadOrder', 'Cohort'])
             else:
                 dataFrame = dataFrame.sort_values(by=['Region', 'LoadOrder', 'Survey'])
         else:
-            if self.datatype in ['entrainment']: 
+            if self.datatype in ['entrainment', 'hatch']: 
                 dataFrame = dataFrame.sort_values(by=['LoadOrder', 'Region', 'Cohort'])
             else:
                 dataFrame = dataFrame.sort_values(by=['LoadOrder', 'Region', 'Survey'])

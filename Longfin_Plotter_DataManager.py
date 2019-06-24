@@ -487,7 +487,7 @@ class DataManager(object):
                                 ignore_index=True)
             return df
                 
-        elif datatype == 'entrainment':
+        elif datatype in ['entrainment']:
             df = pd.DataFrame(columns={'Region', 'q5', 'q25', 'q50', 'q75', 'q95', 'Date',
                                        'Source', 'Hatchstart', 'Catch', 'CatchMean', 
                                        'CatchMin', 'CatchMax', 'Samplemean'})
@@ -524,7 +524,47 @@ class DataManager(object):
                                 'CatchMax': CatchMax},
                                 ignore_index=True)
             return df
-
+        
+        elif datatype in ['hatch']:
+            df = pd.DataFrame(columns={'Region', 'q5', 'q25', 'q50', 'q75', 'q95',
+                                       'Source', 'Hatchstart', 'Catch', 'CatchMean', 
+                                       'CatchMin', 'CatchMax', 'Samplemean'})
+            for index, row in self.Trawl_Data.iterrows():
+                print 'Current line:', index+1
+                Region = row['region'].replace(' ', '_')
+                q5 = row['0.05']
+                q25 = row['0.25']
+                q50 = row['0.5']
+                q75 = row['0.75']
+                q95 = row['0.95']
+                HatchStart = dt.datetime.strptime(row['hatchstart'], '%Y-%m-%d')
+                Cohort = int(row['cohortnum'])
+                Samplemean = row['sample_mean']
+                Catch = row['catch']
+                CatchMean = row['avg']
+                CatchMin = row['lmin']
+                CatchMax = row['lmax']
+                
+                df = df.append({'Region':Region, 
+                                'q5': q5, 
+                                'q25': q25, 
+                                'q50': q50, 
+                                'q75': q75, 
+                                'q95': q95,  
+                                'Hatchstart': HatchStart, 
+                                'Cohort': Cohort, 
+                                'Samplemean': Samplemean,
+                                'catch': Catch, 
+                                'CatchMean': CatchMean, 
+                                'CatchMin': CatchMin, 
+                                'CatchMax': CatchMax},
+                                ignore_index=True)
+            return df
+        
+        else:
+            print 'Error finding datatype', self.datatype
+            print 'Now exiting...'
+            sys.exit(0)
 
     def _get_BoxWhisker_Stats(self, idx):
         '''
@@ -1002,7 +1042,7 @@ class DataManager(object):
 #         else:
 #             self.Surveys = self._check_groupingLength(len_data, self.Surveys)
        
-        if datatype in ['total_predicted', 'total_observed', 'predicted', 'observed', 'entrainment']:
+        if datatype in ['total_predicted', 'total_observed', 'predicted', 'observed', 'entrainment', 'hatch']:
             for i, Trawl_data_Source in enumerate(Trawl_Data):
                 if self.plottype == 'boxwhisker':
                     self.add_Dataset(Trawl_data_Source, i,  datatype=datatype)
@@ -1229,3 +1269,6 @@ class DataManager(object):
                 Valid += valid_idx
             Valid = list(dict.fromkeys(Valid))
             return dataframe.loc[Valid]
+        
+        else:
+            return dataframe
