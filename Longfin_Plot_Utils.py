@@ -7,11 +7,13 @@ import os
 from rmapy.utils.gis import polygons_w_attributes_from_shp as polys_from_shp
 from stompy.grid import unstructured_grid
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 import numpy as np
 from matplotlib.transforms import Bbox
 import pylab
 import datetime as dt
 from shutil import copyfile
+import pandas as pd
 
 class LongfinMap(object):
     '''
@@ -37,14 +39,14 @@ class LongfinMap(object):
                  grd_file,
                  year,
                  sizes,
-                 Groups,
-                 Group_Type):
+                 Cohorts,
+                 Surveys):
         self.run_dir = run_dir
         self.grd_file = grd_file
         self.Year = year
         self.Sizes = sizes
-        self.Groups = Groups
-        self.GroupType = Group_Type
+        self.Cohorts = Cohorts
+        self.Surveys = Surveys
         self.compare = False
         self._get_inputs()
 
@@ -117,9 +119,11 @@ class LongfinMap(object):
         find data for each region plot. Returns list of labels.
         If a survey doesn't have data, a red 'x' is plotted. Else, its blank.
         '''
-        
-        Group = Filtered_DataFrame['Group']
-        labels = np.chararray(len(Group))
+        if self.datatype in ['entrainment']:
+            Groupings = Filtered_DataFrame['Cohort']
+        else:
+            Groupings = Filtered_DataFrame['Survey']
+        labels = np.chararray(len(Groupings))
         labels[:] = 'X'
         i = 0
         for index, row in Filtered_DataFrame.iterrows():
@@ -165,51 +169,62 @@ class LongfinMap(object):
     
     def _get_Unique_Groups(self, DataFrame):
         '''
-        Gets the number of unique groups in a dataset for legend plotting
-        returns tuples containing each group name and its source file
+        Gets the number of unique Surveys in a dataset for legend plotting
+        returns tuples containing each Survey name and its source file
         '''
     
         counted_Groups = []
         for index, row in DataFrame.iterrows():
-            group = row['Group']
-            source = row['Source']
-            GroupSource = (group, source)
+            if self.datatype in ['entrainment']:
+                group = row['Cohort']
+            else:
+                group = row['Survey']
+#             source = row['Source']
+            label = row['Label']
+#             GroupSource = (Survey, source)
+            GroupSource = (group, label)
             if GroupSource not in counted_Groups:
                 counted_Groups.append(GroupSource)
                 
         return counted_Groups
         
-    def _get_Plot_Legend_labels(self, GroupSources):
+    def _get_Plot_Legend_labels(self, GroupLabels):
         '''
         Reads in the source files to figure out what the labels are for the legend.
         If the label is unknown, then ask the user what to use for that source file.
         If additional entries are wanting to be saved, add them to the if/elif/else loop
-        if Hatch, entrainment or fractional_entrainment, the labels are just the group number.
+        if Hatch, entrainment or fractional_entrainment, the labels are just the Survey number.
         #TODO: carry these values over from the connect_sources function in the Longfin_Plotter_DataManager.py 
         '''
-        unknown_Sources = {}
+#         unknown_Sources = {}
         plot_Legend = []
-        for GroupSource in GroupSources: 
+        for GroupLabel in GroupLabels: 
             
-            Group = GroupSource[0]  
-            source = os.path.basename(GroupSource[1])
+            Group = GroupLabel[0]  
+            Label = GroupLabel[1]
+#             source = os.path.basename(GroupSource[1])
 
-            if 'sls' in source.lower():
-                plot_Legend.append('SLS {0}'.format(int(Group)))
-            elif '20mm' in source.lower():
-                plot_Legend.append('20mm {0}'.format(int(Group)))
-            elif 'computed' == source.lower():
-                plot_Legend.append('Computed'.format(int(Group)))
-            elif self.datatype in ['hatch', 'entrainment', 'fractional_entrainment']:
-                plot_Legend.append(int(Group))
+            if self.datatype in ['entrainment']:                
+                plot_Legend.append('{0}'.format(int(Group)))
             else:
-                if source not in unknown_Sources.keys():
-                    print 'Unknown data source {0}'.format(os.path.basename(source))
-                    unknown_ID = raw_input('Please enter a 3 letter ID for new data source: ')
-                    plot_Legend.append('{0} {1}'.format(unknown_ID, int(Group)))
-                    unknown_Sources[os.path.basename(source)] = unknown_ID
-                else:
-                    plot_Legend.append('{0} {1}'.format(unknown_Sources[os.path.basename(source)], int(Group)))
+                plot_Legend.append('{0} {1}'.format(Label, int(Group)))
+
+#             if 'sls' in source.lower():
+#                 plot_Legend.append('SLS {0}'.format(int(Group)))
+#             elif '20mm' in source.lower():
+#                 plot_Legend.append('20mm {0}'.format(int(Group)))
+#             elif 'computed' == source.lower():
+#                 plot_Legend.append('Computed'.format(int(Group)))
+#             elif self.datatype in ['hatch', 'entrainment', 'fractional_entrainment']:
+#                 plot_Legend.append(int(Group))
+#             else:
+#                 if source not in unknown_Sources.keys():
+#                     print 'Unknown data source {0}'.format(os.path.basename(source))
+#                     unknown_ID = raw_input('Please enter a 3 letter ID for new data source: ')
+#                     plot_Legend.append('{0} {1}'.format(unknown_ID, int(Group)))
+#                     unknown_Sources[os.path.basename(source)] = unknown_ID
+#                 else:
+#                     plot_Legend.append('{0} {1}'.format(unknown_Sources[os.path.basename(source)], int(Group)))
                     
         return plot_Legend
     
@@ -240,7 +255,10 @@ class LongfinMap(object):
         elif self.plotType == 'timeseries':
             data_len = 5
         if self.compare:
-            data_len *= 1.5
+            if self.datatype in ['multi']:
+                data_len = data_len
+            else:
+                data_len *= 1.5
         mod = data_len / 4
         if data_len % 4 != 0:
                 mod += 1
@@ -252,6 +270,20 @@ class LongfinMap(object):
         '''
         return len(dataFrame['Days'])    
     
+    def _get_colors(self):
+        
+        if self.datatype in ['hatch', 'entrainment', 'fractional_entrainment']:
+            cmap_pars = pylab.cm.get_cmap('winter') #blues
+            self.colors=[cmap_pars(float(ng)/float(self.Total_Groups)) for ng in range(self.Total_Groups)]
+        elif self.datatype in ['multi']:
+            cmap_pars = pylab.cm.get_cmap('tab10') #blues
+            self.colors=[cmap_pars(float(ng)/float(10)) for ng in range(10)]
+            self.colors = self.colors[:len(self.Sources)]
+        else:
+            cmap_pars = pylab.cm.get_cmap('spring') #purple to yellow
+            self.colors=[cmap_pars(float(ng)/float(self.Total_Groups)) for ng in range(self.Total_Groups)]
+            
+        
     def _make_Legend_Data(self, num_Groups, Plot_Maximum):
         '''
         Makes dummy legend data to look nice for legend plot.
@@ -318,8 +350,22 @@ class LongfinMap(object):
 
         elif self.plotType == 'boxwhisker':
             if self.compare:
-                xticks = list(np.arange(0, len(Labels)*1.5))
-                del xticks[2::3]
+                if self.datatype in ['multi']:
+                    xticks = []
+                    pos_i = 0
+                    del_counter = 0
+                    while len(xticks) < self.Total_Groups:
+    #                     print len(xticks), pos_i, del_counter
+                        if del_counter != len(self.Sources):
+                            if del_counter == (len(self.Sources))/2:
+                                xticks.append(pos_i)
+                            del_counter += 1
+                        else:
+                            del_counter = 0
+                        pos_i += 1
+                else:
+                    xticks = list(np.arange(0, len(Labels)*1.5))
+                    del xticks[2::3]
             else:
                 xticks = np.arange(len(Labels))
                 
@@ -341,6 +387,11 @@ class LongfinMap(object):
             
         elif self.datatype in ['fractional_entrainment']:
             ax.set_xticklabels(Labels,rotation=90,ha='center', fontsize=8)
+            
+        elif self.datatype in ['multi']:
+#             print self.Survey_Nums
+            print self.Surveys[self.Cohort_Number-1:]
+            ax.set_xticklabels(self.Surveys[self.Cohort_Number-1:],ha='center',fontsize=8)
 
         #set up y ticks if log or not
         if self.Log:
@@ -356,8 +407,12 @@ class LongfinMap(object):
         if self.datatype in ['hatch', 'entrainment']:
             ax.set_xlabel('Cohort')
             ax.set_ylabel('Larvae')
-        if self.datatype in ['fractional_entrainment']:
+        elif self.datatype in ['fractional_entrainment']:
             ax.set_ylabel('Fraction Entrained')
+        elif self.datatype in ['multi']:
+            ax.set_ylabel(Var)
+            ax.set_xlabel('Survey')
+            self._add_SubLegend(ax, Labels)
         else:
             ax.set_ylabel(Var)
         
@@ -429,21 +484,26 @@ class LongfinMap(object):
         '''
         Adds the Legend subplot and arranges the data.
         '''
-        #set up the colors for each group
-        if self.datatype in ['hatch', 'entrainment', 'fractional_entrainment']:
-            cmap_pars = pylab.cm.get_cmap('winter') #blues
-            colors=[cmap_pars(float(ng)/float(len(self.Total_Groups))) for ng in range(len(self.Total_Groups))]
-        else:
-            cmap_pars = pylab.cm.get_cmap('spring') #purple to yellow
-            colors=[cmap_pars(float(ng)/float(len(self.Total_Groups))) for ng in range(len(self.Total_Groups))]
+        #set up the self.colors for each group
+        
 #         if self.datatype in ['hatch', 'entrainment', 'fractional_entrainment']:
 #             cmap_pars = pylab.cm.get_cmap('winter') #blues
-#             colors=[cmap_pars(float(ng)/float(len(data))) for ng in range(len(data))]
+#             self.colors=[cmap_pars(float(ng)/float(self.Total_Groups)) for ng in range(self.Total_Groups)]
+#         elif self.datatype in ['multi']:
+#             cmap_pars = pylab.cm.get_cmap('tab10') #blues
+#             self.colors=[cmap_pars(float(ng)/float(10)) for ng in range(10)]
+#             self.colors = self.colors[:self.Total_Groups]
 #         else:
 #             cmap_pars = pylab.cm.get_cmap('spring') #purple to yellow
-#             colors=[cmap_pars(float(ng)/float(len(data))) for ng in range(len(data))]
-        data_diff = len(self.Total_Groups) - len(data)
-        colors = colors[data_diff:]
+#             self.colors=[cmap_pars(float(ng)/float(self.Total_Groups)) for ng in range(self.Total_Groups)]
+#         if self.datatype in ['hatch', 'entrainment', 'fractional_entrainment']:
+#             cmap_pars = pylab.cm.get_cmap('winter') #blues
+#             self.colors=[cmap_pars(float(ng)/float(len(data))) for ng in range(len(data))]
+#         else:
+#             cmap_pars = pylab.cm.get_cmap('spring') #purple to yellow
+#             self.colors=[cmap_pars(float(ng)/float(len(data))) for ng in range(len(data))]
+        data_diff = self.Total_Groups - len(data)
+        self.colors = self.colors[data_diff:]
         
         leg_data = np.asarray(data)
         
@@ -452,18 +512,29 @@ class LongfinMap(object):
             data_pos = np.arange(0, len(data)* 10, 10)
             bar1 = ax.bar(data_pos, leg_data, width=8)
             for b, bar in enumerate(bar1):
-                bar.set_color(colors[b])
+                bar.set_color(self.colors[b])
                 
         elif self.plotType == 'boxwhisker':
             #Boxwhisker legend plots are a series of boxwhiskers, spaced depending on comparisons or not.
             
             widths = [.5] * len(leg_data)
-
             if self.compare:
-                #if we are comparing data, we need to arrange legend data to be in groups of 2.
-                #ie, 1,2,skip,4,5,skip,7,8,skip, etc....
-                data_pos = list(np.arange(0, len(leg_data)*1.5))
-                del data_pos[2::3]
+                if self.datatype in ['multi']:
+                    #if we are comparing data, we need to arrange legend data to be in groups of 2.
+                    #ie, 1,2,skip,4,5,skip,7,8,skip, etc....
+                    data_pos = []
+                    pos_i = 0
+                    del_counter = 0
+                    while len(data_pos) < len(leg_data):
+                        if del_counter != len(self.Sources):
+                            data_pos.append(pos_i)
+                            del_counter += 1
+                        else:
+                            del_counter = 0
+                        pos_i += 1
+                else:
+                    data_pos = list(np.arange(0, len(leg_data)*1.5))
+                    del data_pos[2::3]
             else:
                 #otherwise, just line them up normally
                 data_pos = np.arange(len(leg_data))
@@ -472,29 +543,44 @@ class LongfinMap(object):
             if self.compare:
                 #if we compare data, instead of each group being a different color, we color the observed data green
                 #and the predicted data yellow/orange. 
-                for pn, patch in enumerate(box1['boxes']):
-                    if pn % 2 == 0:
-                        patch.set(facecolor='orange', edgecolor='orange') 
-                        plt.setp(box1['whiskers'][pn*2], color='orange') #Note, each whisker is its own entity
-                        plt.setp(box1['whiskers'][pn*2+1], color='orange')
-                        plt.setp(box1['medians'][pn], color='black') 
-                    else:
-                        patch.set(facecolor='green', edgecolor='green') 
-                        plt.setp(box1['whiskers'][pn*2], color='green') #Note, each whisker is its own entity
-                        plt.setp(box1['whiskers'][pn*2+1], color='green')
-                        plt.setp(box1['medians'][pn], color='black') 
+                if self.datatype in ['multi']:
+                    i = 0
+                    for pn, patch in enumerate(box1['boxes']):
+    
+                        patch.set(facecolor=self.colors[i], edgecolor=self.colors[i]) 
+                        plt.setp(box1['whiskers'][pn*2], color=self.colors[i]) #Note, each whisker is its own entity
+                        plt.setp(box1['whiskers'][pn*2+1], color=self.colors[i])
+                        plt.setp(box1['medians'][pn], color='black')
+                        if i == len(self.Sources)-1:
+                            i = 0
+                        else:
+                            i += 1
+                    
+                else:
+                
+                    for pn, patch in enumerate(box1['boxes']):
+                        if pn % 2 == 0:
+                            patch.set(facecolor='orange', edgecolor='orange') 
+                            plt.setp(box1['whiskers'][pn*2], color='orange') #Note, each whisker is its own entity
+                            plt.setp(box1['whiskers'][pn*2+1], color='orange')
+                            plt.setp(box1['medians'][pn], color='black') 
+                        else:
+                            patch.set(facecolor='green', edgecolor='green') 
+                            plt.setp(box1['whiskers'][pn*2], color='green') #Note, each whisker is its own entity
+                            plt.setp(box1['whiskers'][pn*2+1], color='green')
+                            plt.setp(box1['medians'][pn], color='black') 
             else:
-                #otherwise, color them according to the colorscale above
-                for pn, patch in enumerate(box1['boxes']): #colors each survey its own color from the color scale
-                    patch.set(facecolor=colors[pn], edgecolor=colors[pn]) 
-                    plt.setp(box1['whiskers'][pn*2], color=colors[pn]) #Note, each whisker is its own entity
-                    plt.setp(box1['whiskers'][pn*2+1], color=colors[pn])
+                #otherwise, color them according to the self.colorscale above
+                for pn, patch in enumerate(box1['boxes']): #self.colors each survey its own color from the color scale
+                    patch.set(facecolor=self.colors[pn], edgecolor=self.colors[pn]) 
+                    plt.setp(box1['whiskers'][pn*2], color=self.colors[pn]) #Note, each whisker is its own entity
+                    plt.setp(box1['whiskers'][pn*2+1], color=self.colors[pn])
                     plt.setp(box1['medians'][pn], color='black')
                     
         elif self.plotType == 'timeseries':
             #for timeseries data, just plot each line according to the group and its computed data.
             for i, dataseries in enumerate(data):
-                leg, = ax.plot(dataseries, color=colors[i], label=(i+1))
+                leg, = ax.plot(dataseries, color=self.colors[i], label=(i+1))
 
     def _add_Legend(self, fig, ax, boxsize, DataFrame, Var, Plot_maximum, dates=None):
         '''
@@ -506,7 +592,6 @@ class LongfinMap(object):
         
         Groups = self._get_Unique_Groups(DataFrame) #get tuples with group and source for each point of data for labels
         plot_Legend_labels = self._get_Plot_Legend_labels(Groups) #create labels depending on source
-        
         mod = self._get_Legend_size_Modifier(DataFrame, Var) #figure out if we need to expand the legend
         if self.datatype in ['fractional_entrainment']: #if its a time series plot, make the plot a set size.
             boxsize = [15000.,15000.]
@@ -528,8 +613,8 @@ class LongfinMap(object):
             self._add_TS_legend_labels(axb, Plot_maximum, plot_Legend_labels, legend_data)
         else:
             self._configure_Legend(axb, Plot_maximum, plot_Legend_labels, Var)
-            
 
+            
     def _add_StartDate_Text(self, ax):
         '''
         Adds a small line of text to the plot stating that values are removed before a date
@@ -554,36 +639,41 @@ class LongfinMap(object):
     def _add_Subplot(self, ax, DataFrame, Var, Plot_maximum, labels=[]):
         '''
         Adds Subplot for specified region to the plot window.
-        Gets colors for data, then formats data and plots it.
-        Then colors data to the colormap specified.
+        Gets self.colors for data, then formats data and plots it.
+        Then self.colors data to the colormap specified.
         Then adds red 'x' labels for missing data.
         Subplot is then configured to look pretty.
         '''
-        if self.datatype in ['hatch', 'entrainment', 'fractional_entrainment']:
-            cmap_pars = pylab.cm.get_cmap('winter')
-            num_dataset_sources = len(DataFrame['Group'])
-            colors=[cmap_pars(float(ng)/float(len(self.Total_Groups))) for ng in range(len(self.Total_Groups))]
-        elif self.datatype in ['multipredicted']:
-            cmap_pars = pylab.cm.get_cmap('winter')
+#         if self.datatype in ['hatch', 'entrainment', 'fractional_entrainment']:
+        if self.datatype in ['entrainment']:
+#             cmap_pars = pylab.cm.get_cmap('winter')
+            num_dataset_sources = len(DataFrame['Cohort'])
+#             self.colors=[cmap_pars(float(ng)/float(self.Total_Groups)) for ng in range(self.Total_Groups)]
+        elif self.datatype in ['multi']:
+#             cmap_pars = pylab.cm.get_cmap('tab10')
+#             num_dataset_sources = len(list(set(DataFrame['Source'].tolist())))
+#             self.colors=[cmap_pars(float(ng)/float(10)) for ng in range(10)] #set 1 has 9 catagories..
+#             self.colors = self.colors[:num_dataset_sources]
+#             cmap_pars = pylab.cm.get_cmap('winter')
             num_dataset_sources = len(list(set(DataFrame['Source'].tolist())))
-            colors=[cmap_pars(float(ng)/float(len(self.Total_Groups))) for ng in range(len(self.Total_Groups))]
+#             self.colors=[cmap_pars(float(ng)/float(self.Total_Groups)) for ng in range(self.Total_Groups)]
         else:
-            cmap_pars = pylab.cm.get_cmap('spring')
-            num_dataset_sources = len(DataFrame['Group'])
-            colors=[cmap_pars(float(ng)/float(len(self.Total_Groups))) for ng in range(len(self.Total_Groups))]
+#             cmap_pars = pylab.cm.get_cmap('spring')
+            num_dataset_sources = len(DataFrame['Survey'])
+#             self.colors=[cmap_pars(float(ng)/float(self.Total_Groups)) for ng in range(self.Total_Groups)]
 #         if self.datatype in ['hatch', 'entrainment', 'fractional_entrainment']:
 #             cmap_pars = pylab.cm.get_cmap('winter')
-#             colors=[cmap_pars(float(ng)/float(len(DataFrame['Group']))) for ng in range(len(DataFrame['Group']))]
+#             self.colors=[cmap_pars(float(ng)/float(len(DataFrame['Group']))) for ng in range(len(DataFrame['Group']))]
 #         elif self.datatype in ['multipredicted']:
 #             cmap_pars = pylab.cm.get_cmap('winter')
 #             num_dataset_sources = len(list(set(DataFrame['Source'].tolist())))
-#             colors=[cmap_pars(float(ng)/float(num_dataset_sources)) for ng in range(num_dataset_sources)]
+#             self.colors=[cmap_pars(float(ng)/float(num_dataset_sources)) for ng in range(num_dataset_sources)]
 #         else:
 #             cmap_pars = pylab.cm.get_cmap('spring')
-#             colors=[cmap_pars(float(ng)/float(len(DataFrame['Group']))) for ng in range(len(DataFrame['Group']))]
-        
-        data_diff = len(self.Total_Groups) - num_dataset_sources
-        colors = colors[data_diff:]
+#             self.colors=[cmap_pars(float(ng)/float(len(DataFrame['Group']))) for ng in range(len(DataFrame['Group']))]
+        if self.datatype not in ['multi']:
+            data_diff = self.Total_Groups - num_dataset_sources
+            self.colors = self.colors[data_diff:]
         
         plt_pos = np.arange(len(DataFrame))
         
@@ -592,22 +682,35 @@ class LongfinMap(object):
             plt_data = self._formatPlotData(DataFrame, Var=Var)
             bar1 = ax.bar(plt_pos, plt_data, width=.7)
             for b, bar in enumerate(bar1):
-                bar.set_color(colors[b])
+                bar.set_color(self.self.colors[b])
                 
         elif self.plotType == 'boxwhisker':
             plt_data = self._formatPlotData(DataFrame)
             if self.compare:
-                if self.datatype == 'mulitpredicted':
-                    bw_pos = list(np.arange(0, len(DataFrame)*1.5))
-                    del bw_pos[len(DataFrame)::(len(DataFrame) + 1)]
+                if self.datatype == 'multi':
+#                     bw_pos = list(np.arange(0, len(DataFrame)*1.5))
+#                     print bw_pos, len(DataFrame)
+#                     del bw_pos[len(DataFrame)::(len(DataFrame) + 1)]
+                    bw_pos = []
+                    pos_i = 0
+                    del_counter = 0
+                    while len(bw_pos) < len(DataFrame):
+                        if del_counter != num_dataset_sources:
+                            bw_pos.append(pos_i)
+                            del_counter += 1
+                        else:
+                            del_counter = 0
+                        pos_i += 1
+
                     box1 = ax.bxp(plt_data, positions=bw_pos, showfliers=False, patch_artist=True)
                     i = 0
                     for pn, patch in enumerate(box1['boxes']):
-                        patch.set(facecolor=colors[i], edgecolor=colors[i]) 
-                        plt.setp(box1['whiskers'][pn*2], color=colors[i]) #Note, each whisker is its own entity
-                        plt.setp(box1['whiskers'][pn*2+1], color=colors[i])
+
+                        patch.set(facecolor=self.colors[i], edgecolor=self.colors[i]) 
+                        plt.setp(box1['whiskers'][pn*2], color=self.colors[i]) #Note, each whisker is its own entity
+                        plt.setp(box1['whiskers'][pn*2+1], color=self.colors[i])
                         plt.setp(box1['medians'][pn], color='black')
-                        if i == len(DataFrame):
+                        if i == num_dataset_sources-1:
                             i = 0
                         else:
                             i += 1
@@ -629,16 +732,16 @@ class LongfinMap(object):
                         
             else:
                 box1 = ax.bxp(plt_data, showfliers=False, patch_artist=True)
-                for pn, patch in enumerate(box1['boxes']): #colors each survey its own color from the color scale
-                    patch.set(facecolor=colors[pn], edgecolor=colors[pn]) 
-                    plt.setp(box1['whiskers'][pn*2], color=colors[pn]) #Note, each whisker is its own entity
-                    plt.setp(box1['whiskers'][pn*2+1], color=colors[pn])
+                for pn, patch in enumerate(box1['boxes']): #self.colors each survey its own color from the color scale
+                    patch.set(facecolor=self.colors[pn], edgecolor=self.colors[pn]) 
+                    plt.setp(box1['whiskers'][pn*2], color=self.colors[pn]) #Note, each whisker is its own entity
+                    plt.setp(box1['whiskers'][pn*2+1], color=self.colors[pn])
                     plt.setp(box1['medians'][pn], color='black')
                     
         elif self.plotType == 'timeseries':
             plt_data = self._formatPlotData(DataFrame, Var=Var)
             for i, linedata in enumerate(plt_data):
-                ts = ax.plot(linedata, color=colors[i])
+                ts = ax.plot(linedata, color=self.colors[i])
         
         self._configure_Subplot(ax, Plot_maximum)
         
@@ -658,11 +761,16 @@ class LongfinMap(object):
                         
             elif self.plotType == 'boxwhisker':
                 numBoxes = len(plt_data)
-                if not self.compare:
-                    pos = np.arange(numBoxes) + 1
+                if self.compare:
+                    if self.datatype in ['multi']:
+                        pos = bw_pos
+                    else:
+                        pos = list(np.arange(0, numBoxes*1.5))
+                        del pos[2::3]
                 else:
-                    pos = list(np.arange(0, numBoxes*1.5))
-                    del pos[2::3]
+                
+                    pos = np.arange(numBoxes) + 1
+
                 ylims = plt.ylim()
                 if len(labels) > 10:
                     for tick, label in zip(range(numBoxes), labels):
@@ -687,7 +795,23 @@ class LongfinMap(object):
             leg_labels.append(str(plot_Legend_labels[i]))
         axb2.set_yticks(leg_data)  
         axb2.set_yticklabels(leg_labels)
-        axb2.set_ylabel(self.GroupType)
+        axb2.set_ylabel(self.datatype)
+    
+    def _add_SubLegend(self, ax, Labels):
+        custom_lines = []
+#         print self.Data_labels
+        unique_labels = []
+        for label in Labels:
+            lab = ' '.join(label.split(' ')[:-1])
+            if lab not in unique_labels:
+                unique_labels.append(lab)
+        box = ax.get_position()
+        ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
+        for i, label in enumerate(unique_labels):
+            custom_lines.append(Line2D([0], [0], color=self.colors[i], lw=4))
+            
+        ax.legend(custom_lines, unique_labels, loc='center left', 
+                  bbox_to_anchor=(1, 0.5), frameon=False, prop={'size': 7})
     
     def _formatPlotData(self, data, Var=None):
         '''
@@ -788,7 +912,7 @@ class LongfinMap(object):
             os.mkdir(r'Plots')
         if self.datatype == None:
             filename = '{0}_{1}_Size_{2}mm-{3}mm_{4}'.format(self.Year, self.plotType, self.Sizes[0], self.Sizes[1], Var)
-        elif self.datatype in ['hatch', 'entrainment', 'fractional_entrainment','multipredicted']:
+        elif self.datatype in ['hatch', 'entrainment', 'fractional_entrainment','multi']:
             filename = '{0}_{1}_{2}_{3}'.format(self.Year, self.plotType, Var, self.datatype.title())
         elif self.datatype in ['cohort']:
             filename = '{0}_{1}_Size_{2}mm-{3}mm_{4}_Cohort{5}'.format(self.Year, self.plotType, self.Sizes[0], self.Sizes[1], Var, self.Cohort_Number)
@@ -829,7 +953,7 @@ class LongfinMap(object):
         self.datatype = datatype
         self.Fishtype = Fishtype
         boxsize = [10000.,10000.] #Check this
-        
+        self._get_colors()
         ax, fig = self._create_Plot(Var)
 
         if max > 0.:
@@ -838,9 +962,9 @@ class LongfinMap(object):
             Plot_maximum = self._get_Plot_Scale(dataFrame, Var)
         
         if self.Chronological:
-            dataFrame = dataFrame.sort_values(['Region', 'PlotOrder', 'Group'])
+            dataFrame = dataFrame.sort_values(by=['Region', 'PlotOrder', 'Group'])
         else:
-            dataFrame = dataFrame.sort_values(['LoadOrder','Region', 'Group'])
+            dataFrame = dataFrame.sort_values(by=['LoadOrder','Region', 'Group'])
         
         for region in self.plot_poly_dict.keys():
 
@@ -871,9 +995,14 @@ class LongfinMap(object):
         self.Chronological = Chronological
         self.Cohort_Number=cohortNum
         self.datatype = datatype
+        
+        if self.datatype in ['entrainment']:
+            self.Total_Groups = len(dataFrame.Cohort.unique())
+        else:
+            self.Total_Groups = len(dataFrame.Survey.unique())
         self.Fishtype = Fishtype
         boxsize = [10000.,10000.] #Check this
-        
+        self._get_colors()
         ax, fig = self._create_Plot(Var)
         
         if max > 0.:
@@ -882,13 +1011,23 @@ class LongfinMap(object):
             Plot_maximum = self._get_Plot_Scale(dataFrame, Var)
         
         if Chronological:
-            dataFrame = dataFrame.sort_values(['Region', 'PlotOrder', 'Group'])
+            if self.datatype in ['entrainment']: 
+                dataFrame = dataFrame.sort_values(by=['Region', 'LoadOrder', 'Cohort'])
+            else:
+                dataFrame = dataFrame.sort_values(by=['Region', 'LoadOrder', 'Survey'])
         else:
-            dataFrame = dataFrame.sort_values(['LoadOrder', 'Region', 'Group'])
+            if self.datatype in ['entrainment']: 
+                dataFrame = dataFrame.sort_values(by=['LoadOrder', 'Region', 'Cohort'])
+            else:
+                dataFrame = dataFrame.sort_values(by=['LoadOrder', 'Region', 'Survey'])
         
         for region in self.plot_poly_dict.keys():
-
             region_data = dataFrame.query('Region=="{0}"'.format(region))
+            if len(region_data) == 0:
+                for i in range(self.Total_Groups):
+                    region_data = region_data.append({'Region': region,
+                                                      'Cohort': i},
+                                                      ignore_index=True)
 
             labels = self._get_Plot_Labels(region_data)
             
@@ -912,8 +1051,11 @@ class LongfinMap(object):
         self.plotType = 'boxwhisker'
         self.Chronological = Chronological
         self.Cohort_Number = Cohort_Number
+        self.Total_Groups = len(dataFrame.Survey.unique())
         self.datatype = datatype
         self.Fishtype = Fishtype
+        self.Sources = dataFrame.Source.unique()
+        self._get_colors()
         boxsize = [10000.,10000.] #Check this
         
         ax, fig = self._create_Plot(Var)
@@ -923,14 +1065,54 @@ class LongfinMap(object):
         else:
             Plot_maximum = self._get_Plot_Scale(dataFrame, Var)
         
-        if self.datatype == 'multipredicted':
-            dataFrame = dataFrame.sort_values(['Region', 'Group', 'LoadOrder'])
-        else:
-            dataFrame = dataFrame.sort_values(['Region', 'Group'])
+        dataFrame = dataFrame.sort_values(by=['Region', 'Survey'])
 
         
         for region in self.plot_poly_dict.keys():
 
+            region_data = dataFrame.query('Region=="{0}"'.format(region))
+
+            labels = self._get_Plot_Labels(region_data)
+            
+            fig_coords = self._get_Fig_Coordinates(fig, ax, self._findSiteLoc(region), boxsize)
+            axb = fig.add_axes(Bbox(fig_coords))
+            
+            self._add_Subplot(axb, region_data, Var, Plot_maximum, labels=labels)
+            fig.show()
+            fig.canvas.draw()
+            
+        self._add_Legend(fig, ax, boxsize, region_data, Var, Plot_maximum)
+        
+    def plot_MultiObsVsPred_Boxwhisker(self, dataFrame, Var, Chronological, Cohort_Number, Log, Fishtype, datatype=None, max=0.):
+        '''
+        Adds subplots for each specified region and adds a new subplot for the data.
+        Takes in organized Pandas dataFrame grabs data based on Var.
+        '''
+        self.compare = True
+        self.Log = Log
+        self.plotType = 'boxwhisker'
+        self.Chronological = Chronological
+        self.Cohort_Number = Cohort_Number
+        self.Total_Groups = len(dataFrame.Survey.unique())
+        self.Survey_Nums = dataFrame.Survey.unique()
+        self.Sources = dataFrame.Source.unique()
+        self.Data_labels = dataFrame.Label.unique()
+        self.datatype = datatype
+        self.Fishtype = Fishtype
+        self._get_colors()
+
+        boxsize = [10000.,10000.] #Check this
+        
+        ax, fig = self._create_Plot(Var)
+        
+        if max > 0.:
+            Plot_maximum = max
+        else:
+            Plot_maximum = self._get_Plot_Scale(dataFrame, Var)
+        
+        dataFrame = dataFrame.sort_values(by=['Region', 'Survey', 'LoadOrder'])
+
+        for region in self.plot_poly_dict.keys():
             region_data = dataFrame.query('Region=="{0}"'.format(region))
 
             labels = self._get_Plot_Labels(region_data)
@@ -959,13 +1141,13 @@ class LongfinMap(object):
         boxsize = [10000.,10000.] #Check this
         self.numdays = self._getNumdays(dataFrame)
         ax, fig = self._create_Plot(Var)
-        
+        self._get_colors()
         if max > 0.:
             Plot_maximum = max
         else:
             Plot_maximum = self._get_Plot_Scale(dataFrame, Var)
         
-        dataFrame = dataFrame.sort_values(['Region', 'Group'])
+        dataFrame = dataFrame.sort_values(by=['Region', 'Group'])
 
         
         for region in self.plot_poly_dict.keys():
