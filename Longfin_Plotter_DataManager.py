@@ -12,7 +12,7 @@ import math
     
 class DataManager(object):
     '''
-    Class to handle Trawl data. Each Trawl data is paired with a static volume file in 
+    Class to handle data. Each data is paired with a static volume file in 
     order to calculate different Metrics.
     Included must be a list of regions.
     '''
@@ -113,11 +113,11 @@ class DataManager(object):
         self.mainDataFrame = pd.concat([self.mainDataFrame, dataframe])
         print 'Main Dataframe appended'
         
-    def _read_Trawl_Data(self, Data_file):
+    def _read_Data(self, Data_file):
         '''
-        Reads in the trawl csv file and makes it a class object through pandas
+        Reads in the csv file and makes it a class object through pandas
         '''
-        self.Trawl_Data = pd.read_csv(Data_file)
+        self._Data = pd.read_csv(Data_file)
         return
         
     def _read_Static_Volumes(self, static_volume_file):
@@ -133,7 +133,7 @@ class DataManager(object):
     
     def _get_Valid_Idx(self, Key, DataField, Filter=None, contain=False):
         '''
-        Gathers all the correct indexes for a trawl data file for a determined column and key.
+        Gathers all the correct indexes for a data file for a determined column and key.
         For example, gathers all index for Region Napa Sonoma
         Filter allows the user to pass in existing filtered indexes in the form of a list.
         The code will then choose cells that meet both list criteria, so that the user can
@@ -145,7 +145,7 @@ class DataManager(object):
         Filter: existing list of indexes from a previously filtered list. 
         contain: instead of checking for exact matches, checks for a string to be in the header
         
-        returns list of indexes in Trawl Data csv that meets criteria
+        returns list of indexes in Data csv that meets criteria
         '''
         if contain:
             valid_Idx = [r for r, value in enumerate(self.Trawl_Data.columns.values) if str(Key) in value]
@@ -153,15 +153,15 @@ class DataManager(object):
                 valid_Idx = list(set(valid_Idx).intersection(Filter))
             
             if len(valid_Idx) == 0:
-                print 'ERROR in Trawl Data. Field {0} not found in headers.'.format(Key)
+                print 'ERROR in  Data. Field {0} not found in headers.'.format(Key)
                 
         else:
             if DataField not in self.Trawl_Data.columns: #if the datafield does not exist in the dataset
                 try:
                     DataField.lower() in self.Trawl_Data.columns #try the lowercase first
                 except: #if its not, quit and fix.
-                    print 'ERROR in Trawl Data. Field {0} not found in headers.'.format(DataField)
-                    print 'Ensure Trawl Data has proper headers and restart.'
+                    print 'ERROR in Data. Field {0} not found in headers.'.format(DataField)
+                    print 'Ensure Data has proper headers and restart.'
                     sys.exit(0)
                 else:
                     DataField = DataField.lower() #if its there but lowercase, change input to lowercase
@@ -215,7 +215,7 @@ class DataManager(object):
         '''
         if header not in self.Trawl_Data.columns:   
             while header not in self.Trawl_Data.columns:
-                print 'WARNING: Header {0} not found in Trawl Data Columns.'.format(header)
+                print 'WARNING: Header {0} not found in Data Columns.'.format(header)
                 header = raw_input('Please enter header to be used instead: ')
                 
         return header
@@ -354,14 +354,14 @@ class DataManager(object):
             df = pd.DataFrame(columns={'Region', 'q5', 'q25', 'q50', 'q75', 'q95', 'Survey', 'Surveydate', 'Hatchstart', 'Cohort', 'Samplemean',
                                               'catch', 'CatchMean', 'CatchMin', 'CatchMax', 'Source'})
             
-            survey_dates = self.Trawl_Data.surveydate.unique() #get all survey dates
+            survey_dates = self.Trawl_Data.date.unique() #get all survey dates
             survey_dates = [dt.datetime.strptime(n, '%Y-%m-%d') for n in survey_dates] #turn into dt objects
             survey_dates = np.sort(survey_dates) #sort by date
             survey_dates = {x:i+1 for i,x in enumerate(survey_dates)} #make a dict with survey nums
             
             for index, row in self.Trawl_Data.iterrows():
                 print 'Current line:', index+1
-                Surveydate = dt.datetime.strptime(row['surveydate'], '%Y-%m-%d')
+                Surveydate = dt.datetime.strptime(row['date'], '%Y-%m-%d')
                 Survey = survey_dates[Surveydate]
                 Region = row['region'].replace(' ', '_')
                 q5 = row['0.05']
@@ -373,7 +373,7 @@ class DataManager(object):
                 Cohort = int(row['cohortnum'])
                 Samplemean = row['sample_mean']
                 Catch = row['catch']
-                CatchMean = row['mean']
+                CatchMean = row['avg']
                 CatchMin = row['lmin']
                 CatchMax = row['lmax']
                 
@@ -407,8 +407,8 @@ class DataManager(object):
                 q50 = row['0.5']
                 q75 = row['0.75']
                 q95 = row['0.95']
-                Date = dt.datetime.strptime(row['date'], '%m/%d/%Y')
-                HatchStart = dt.datetime.strptime(row['hatchstart'], '%m/%d/%Y')
+                Date = dt.datetime.strptime(row['date'], '%Y-%m-%d')
+                HatchStart = dt.datetime.strptime(row['hatchstart'], '%Y-%m-%d')
                 Cohort = int(row['cohortnum'])
                 Samplemean = row['sample_mean']
                 Catch = row['catch']
@@ -460,21 +460,20 @@ class DataManager(object):
             df = pd.DataFrame(columns={'Region', 'Survey', 'q5', 'q25', 'q50', 'q75', 'q95', 'Date', 'Source'})
             
             survey_dates = self.Trawl_Data.surveydate.unique() #get all survey dates
-            survey_dates = [dt.datetime.strptime(n, '%m/%d/%Y') for n in survey_dates] #turn into dt objects
+            survey_dates = [dt.datetime.strptime(n, '%Y-%m-%d') for n in survey_dates] #turn into dt objects
             survey_dates = np.sort(survey_dates) #sort by date
             survey_dates = {x:i+1 for i,x in enumerate(survey_dates)} #make a dict with survey nums
             
             for index, row in self.Trawl_Data.iterrows():
                 print 'Current line:', index+1
-                Surveydate = dt.datetime.strptime(row['surveydate'], '%m/%d/%Y')
-                Survey = survey_dates[Surveydate]
+                Date = dt.datetime.strptime(row['date'], '%Y-%m-%d')
+                Survey = survey_dates[Date]
                 Region = row['region'].replace(' ', '_')
                 q5 = row['0.05']
                 q25 = row['0.25']
                 q50 = row['0.5']
                 q75 = row['0.75']
                 q95 = row['0.95']
-                Date = dt.datetime.strptime(row['surveydate'], '%m/%d/%Y')
                 
                 df = df.append({'Region':Region, 
                                 'Survey':Survey,
@@ -901,8 +900,8 @@ class DataManager(object):
    
     def _get_Survey_Dates(self, dataFrame, Survey):
         '''
-        Gets dates for all trawls for a specific survey, region agnostic. Allows user to get a range of dates
-        that a survey may be in in the event that the Trawl data is incomplete.
+        Gets dates for all fish for a specific survey, region agnostic. Allows user to get a range of dates
+        that a survey may be in in the event that the data is incomplete.
         Used mostly to get correct data for Predicted data.
         '''
         Survey_dates = []
@@ -972,7 +971,7 @@ class DataManager(object):
             Group_order = self._get_Group_Order(self.mainDataFrame)
             self._add_PlotOrder(Group_order)
             
-    def add_Dataset(self, Trawl_Data, load_order, datatype=None):
+    def add_Dataset(self, _Data, load_order, datatype=None):
         '''
         Reads in dataset and gets the main data, and then adds it to the master dataframe
         '''
@@ -1026,16 +1025,16 @@ class DataManager(object):
 #                         self._append_mainDataframe(Region=region, Group=Group, GroupType=GroupType, Source=Trawl_Data, LoadOrder=load_order,
 #                                                    Values=ts_data)
 
-    def InitializeData(self, Trawl_Data, datatype=None, Label=None):
+    def InitializeData(self, _Data, datatype=None, Label=None):
         '''
         Takes in a dataset and adds it to the main dataframe
         '''
         
-        if type(Trawl_Data) == str:
+        if type(_Data) == str:
             len_data = 1
-            Trawl_Data = [Trawl_Data]
-        elif type(Trawl_Data) == list:
-            len_data = len(Trawl_Data)
+            _Data = [_Data]
+        elif type(_Data) == list:
+            len_data = len(_Data)
         
 #         if datatype in ['entrainment']:
 #             self.Cohorts = self._check_groupingLength(len_data, self.Cohorts)
@@ -1043,17 +1042,17 @@ class DataManager(object):
 #             self.Surveys = self._check_groupingLength(len_data, self.Surveys)
        
         if datatype in ['total_predicted', 'total_observed', 'predicted', 'observed', 'entrainment', 'hatch']:
-            for i, Trawl_data_Source in enumerate(Trawl_Data):
+            for i, data_Source in enumerate(_Data):
                 if self.plottype == 'boxwhisker':
-                    self.add_Dataset(Trawl_data_Source, i,  datatype=datatype)
+                    self.add_Dataset(data_Source, i,  datatype=datatype)
                 elif self.plottype == 'bar':
                     print '{0} Dataset Bar plots not yet implemented.'.format(datatype)
                     print 'Now Exiting...'
                     sys.exit(0)
         
         elif datatype == None: 
-            for i, Trawl_data_Source in enumerate(Trawl_Data):
-                self.add_Dataset(Trawl_data_Source, i, self.Groups[i], self.GroupType)
+            for i, data_Source in enumerate(_Data):
+                self.add_Dataset(data_Source, i, self.Groups[i], self.GroupType)
 #                     
         else:
             print 'unknown datatype. Now Exiting...'
@@ -1133,11 +1132,11 @@ class DataManager(object):
         '''
         Gets the correct predicted time series data from Computed data excel files. 
         Observed forms give daily values for q5, q25, q50, q75, and q95 regional values.
-        By using an observed trawl data file, dates for each region and survey are grabbed.
+        By using an observed data file, dates for each region and survey are grabbed.
         Values from the computed file are then averaged over the selected days and returned in a dataframe.
         
         If Total flag is true, Values for each survey are computed by iterating through each 
-        observed file. A date for each survey trawl is found. Then each quantiles file before the
+        observed file. A date for each survey is found. Then each quantiles file before the
         '''  
 #         Avg_Pred_Df = pd.DataFrame(columns=['Region', 'Survey', 'Source', 'q5', 'q25', 'q50', 'q75', 'q95'])
         Valid = []
