@@ -117,7 +117,7 @@ class DataManager(object):
         '''
         Reads in the csv file and makes it a class object through pandas
         '''
-        self._Data = pd.read_csv(Data_file)
+        self.Data = pd.read_csv(Data_file)
         return
         
     def _read_Static_Volumes(self, static_volume_file):
@@ -148,7 +148,7 @@ class DataManager(object):
         returns list of indexes in Data csv that meets criteria
         '''
         if contain:
-            valid_Idx = [r for r, value in enumerate(self.Trawl_Data.columns.values) if str(Key) in value]
+            valid_Idx = [r for r, value in enumerate(self.Data.columns.values) if str(Key) in value]
             if Filter != None and type(Filter) == list:
                 valid_Idx = list(set(valid_Idx).intersection(Filter))
             
@@ -156,9 +156,9 @@ class DataManager(object):
                 print 'ERROR in  Data. Field {0} not found in headers.'.format(Key)
                 
         else:
-            if DataField not in self.Trawl_Data.columns: #if the datafield does not exist in the dataset
+            if DataField not in self.Data.columns: #if the datafield does not exist in the dataset
                 try:
-                    DataField.lower() in self.Trawl_Data.columns #try the lowercase first
+                    DataField.lower() in self.Data.columns #try the lowercase first
                 except: #if its not, quit and fix.
                     print 'ERROR in Data. Field {0} not found in headers.'.format(DataField)
                     print 'Ensure Data has proper headers and restart.'
@@ -166,7 +166,7 @@ class DataManager(object):
                 else:
                     DataField = DataField.lower() #if its there but lowercase, change input to lowercase
                 
-            valid_Idx = [r for r, value in enumerate(self.Trawl_Data[DataField].values) if value == Key]
+            valid_Idx = [r for r, value in enumerate(self.Data[DataField].values) if value == Key]
             if Filter != None and type(Filter) == list:
                 valid_Idx = list(set(valid_Idx).intersection(Filter))
             
@@ -178,7 +178,7 @@ class DataManager(object):
         '''
         total = 0
         for idx in Idxs:
-            total += self.Trawl_Data[column].values[idx]
+            total += self.Data[column].values[idx]
         return total
             
         
@@ -213,8 +213,8 @@ class DataManager(object):
         checks and make sure datasets have correctly named 
         If the header cannot be found, the user may manually enter a new one
         '''
-        if header not in self.Trawl_Data.columns:   
-            while header not in self.Trawl_Data.columns:
+        if header not in self.Data.columns:   
+            while header not in self.Data.columns:
                 print 'WARNING: Header {0} not found in Data Columns.'.format(header)
                 header = raw_input('Please enter header to be used instead: ')
                 
@@ -244,10 +244,10 @@ class DataManager(object):
         
         elif self.plottype == 'boxwhisker':
             if datatype in ['predicted', 'multipredicted']:
-                valid_headers = [n for n in self.Trawl_Data.columns.values if Region in n]
+                valid_headers = [n for n in self.Data.columns.values if Region in n]
                 region_df = pd.DataFrame(columns={'Region', 'q5', 'q25', 'q50', 'q75', 'q95', 'Day', 'Source'})
                 
-                for index, row in self.Trawl_Data.iterrows():
+                for index, row in self.Data.iterrows():
                     try:
                         date_string = dt.datetime(1970,1,1) + dt.timedelta(days=int(row['date_string']))
                     except KeyError:
@@ -266,10 +266,10 @@ class DataManager(object):
                 return region_df
             
             elif datatype in ['hatch', 'entrainment']:
-                valid_headers = [n for n in self.Trawl_Data.columns.values if Region in n]
+                valid_headers = [n for n in self.Data.columns.values if Region in n]
                 region_df = pd.DataFrame(columns={'Region', 'q5', 'q25', 'q50', 'q75', 'q95', 'Group', 'Source'})
                 
-                for index, row in self.Trawl_Data.iterrows():
+                for index, row in self.Data.iterrows():
                     try:
                         group = row[self.GroupType]
                     except KeyError:
@@ -287,10 +287,10 @@ class DataManager(object):
                     
             
             elif datatype in ['condensed_predicted']:
-                valid_headers = [n for n in self.Trawl_Data.columns.values if Region in n]
+                valid_headers = [n for n in self.Data.columns.values if Region in n]
                 region_df = pd.DataFrame(columns={'Region', 'q5', 'q25', 'q50', 'q75', 'q95', 'Day', 'Source', 'Group'})
                 
-                for index, row in self.Trawl_Data.iterrows():
+                for index, row in self.Data.iterrows():
                     try:
                         date_string = dt.datetime(1970,1,1) + dt.timedelta(days=int(row['date_string']))
                     except KeyError:
@@ -336,7 +336,7 @@ class DataManager(object):
             region_idx = self._get_Valid_Idx(Region, 'region', contain=True)
             Group_Idx = self._get_Valid_Idx(Group, GroupType, Filter=region_idx, contain=True)
 
-            for i, (label, content) in enumerate(self.Trawl_Data.iteritems()):
+            for i, (label, content) in enumerate(self.Data.iteritems()):
                 if i in Group_Idx:
                     region = '_'.join(label.split('_')[:-1])
                     Group = label.split('_')[-1]
@@ -351,18 +351,19 @@ class DataManager(object):
         '''
         
         if datatype in ['observed']:
-            df = pd.DataFrame(columns={'Region', 'q5', 'q25', 'q50', 'q75', 'q95', 'Survey', 'Surveydate', 'Hatchstart', 'Cohort', 'Samplemean',
+            df = pd.DataFrame(columns={'Region', 'q5', 'q25', 'q50', 'q75', 'q95', 'Survey', 'Date', 'Hatchstart', 'Cohort', 'Samplemean',
                                               'catch', 'CatchMean', 'CatchMin', 'CatchMax', 'Source'})
             
-            survey_dates = self.Trawl_Data.date.unique() #get all survey dates
+            survey_dates = self.Data.date.unique() #get all survey dates
             survey_dates = [dt.datetime.strptime(n, '%Y-%m-%d') for n in survey_dates] #turn into dt objects
             survey_dates = np.sort(survey_dates) #sort by date
             survey_dates = {x:i+1 for i,x in enumerate(survey_dates)} #make a dict with survey nums
             
-            for index, row in self.Trawl_Data.iterrows():
-                print 'Current line:', index+1
-                Surveydate = dt.datetime.strptime(row['date'], '%Y-%m-%d')
-                Survey = survey_dates[Surveydate]
+            for index, row in self.Data.iterrows():
+                if index+1 % 100 == 0:
+                    print 'Current line:', index+1
+                Date = dt.datetime.strptime(row['date'], '%Y-%m-%d')
+                Survey = survey_dates[Date]
                 Region = row['region'].replace(' ', '_')
                 q5 = row['0.05']
                 q25 = row['0.25']
@@ -384,7 +385,7 @@ class DataManager(object):
                                 'q75': q75, 
                                 'q95': q95, 
                                 'Survey': int(Survey), 
-                                'Surveydate': Surveydate, 
+                                'Date': Date, 
                                 'Hatchstart': HatchStart, 
                                 'Cohort': Cohort, 
                                 'Samplemean': Samplemean,
@@ -399,16 +400,21 @@ class DataManager(object):
             df = pd.DataFrame(columns={'Region', 'q5', 'q25', 'q50', 'q75', 'q95', 'Hatchstart', 'Date', 'Cohort', 'Samplemean',
                                               'catch', 'CatchMean', 'CatchMin', 'CatchMax', 'Source'})
             
-            for index, row in self.Trawl_Data.iterrows():
-                print 'Current line:', index+1
+            for index, row in self.Data.iterrows():
+                if index+1 % 100 == 0:
+                    print 'Current line:', index+1
                 Region = row['region'].replace(' ', '_')
                 q5 = row['0.05']
                 q25 = row['0.25']
                 q50 = row['0.5']
                 q75 = row['0.75']
                 q95 = row['0.95']
-                Date = dt.datetime.strptime(row['date'], '%Y-%m-%d')
-                HatchStart = dt.datetime.strptime(row['hatchstart'], '%Y-%m-%d')
+                try:
+                    Date = dt.datetime.strptime(row['date'], '%Y-%m-%d')
+                    HatchStart = dt.datetime.strptime(row['hatchstart'], '%Y-%m-%d')
+                except:
+                    Date = dt.datetime.strptime(row['date'], '%m/%d/%Y')
+                    HatchStart = dt.datetime.strptime(row['hatchstart'], '%m/%d/%Y')
                 Cohort = int(row['cohortnum'])
                 Samplemean = row['sample_mean']
                 Catch = row['catch']
@@ -436,8 +442,9 @@ class DataManager(object):
         elif datatype in ['total_predicted']:
             df = pd.DataFrame(columns={'Region', 'q5', 'q25', 'q50', 'q75', 'q95', 'Date', 'Source'})
             
-            for index, row in self.Trawl_Data.iterrows():
-                print 'Current line:', index+1
+            for index, row in self.Data.iterrows():
+                if index+1 % 100 == 0:
+                    print 'Current line:', index+1
                 Region = row['region'].replace(' ', '_')
                 q5 = row['0.05']
                 q25 = row['0.25']
@@ -459,13 +466,14 @@ class DataManager(object):
         elif datatype in ['total_observed']:
             df = pd.DataFrame(columns={'Region', 'Survey', 'q5', 'q25', 'q50', 'q75', 'q95', 'Date', 'Source'})
             
-            survey_dates = self.Trawl_Data.surveydate.unique() #get all survey dates
+            survey_dates = self.Data.date.unique() #get all survey dates
             survey_dates = [dt.datetime.strptime(n, '%Y-%m-%d') for n in survey_dates] #turn into dt objects
             survey_dates = np.sort(survey_dates) #sort by date
             survey_dates = {x:i+1 for i,x in enumerate(survey_dates)} #make a dict with survey nums
             
-            for index, row in self.Trawl_Data.iterrows():
-                print 'Current line:', index+1
+            for index, row in self.Data.iterrows():
+                if index+1 % 100 == 0:
+                    print 'Current line:', index+1
                 Date = dt.datetime.strptime(row['date'], '%Y-%m-%d')
                 Survey = survey_dates[Date]
                 Region = row['region'].replace(' ', '_')
@@ -490,8 +498,9 @@ class DataManager(object):
             df = pd.DataFrame(columns={'Region', 'q5', 'q25', 'q50', 'q75', 'q95', 'Date',
                                        'Source', 'Hatchstart', 'Catch', 'CatchMean', 
                                        'CatchMin', 'CatchMax', 'Samplemean'})
-            for index, row in self.Trawl_Data.iterrows():
-                print 'Current line:', index+1
+            for index, row in self.Data.iterrows():
+                if index+1 % 100 == 0:
+                    print 'Current line:', index+1
                 Region = row['region'].replace(' ', '_')
                 q5 = row['0.05']
                 q25 = row['0.25']
@@ -528,8 +537,9 @@ class DataManager(object):
             df = pd.DataFrame(columns={'Region', 'q5', 'q25', 'q50', 'q75', 'q95',
                                        'Source', 'Hatchstart', 'Catch', 'CatchMean', 
                                        'CatchMin', 'CatchMax', 'Samplemean'})
-            for index, row in self.Trawl_Data.iterrows():
-                print 'Current line:', index+1
+            for index, row in self.Data.iterrows():
+                if index+1 % 100 == 0:
+                    print 'Current line:', index+1
                 Region = row['region'].replace(' ', '_')
                 q5 = row['0.05']
                 q25 = row['0.25']
@@ -561,7 +571,7 @@ class DataManager(object):
             return df
         
         else:
-            print 'Error finding datatype', self.datatype
+            print 'Error finding datatype', self.Datatype
             print 'Now exiting...'
             sys.exit(0)
 
@@ -570,11 +580,11 @@ class DataManager(object):
         Sorts and grabs boxwhisker stats from file.
         '''
         
-        q5 = self.Trawl_Data['q5'][idx] 
-        q25 = self.Trawl_Data['q25'][idx] 
-        q50 = self.Trawl_Data['q50'][idx] 
-        q75 = self.Trawl_Data['q75'][idx] 
-        q95 = self.Trawl_Data['q95'][idx]
+        q5 = self.Data['q5'][idx] 
+        q25 = self.Data['q25'][idx] 
+        q50 = self.Data['q50'][idx] 
+        q75 = self.Data['q75'][idx] 
+        q95 = self.Data['q95'][idx]
         
         return q5,q25,q50,q75,q95
         
@@ -584,7 +594,7 @@ class DataManager(object):
         Gets dates from timeseries file and turns them into dt objects
         '''
         converted_datestr = []
-        for date in self.Trawl_Data['date_string'].tolist():
+        for date in self.Data['date_string'].tolist():
             try:
                 date_string = dt.datetime(1970,1,1) + dt.timedelta(days=int(date))
             except KeyError:
@@ -615,6 +625,18 @@ class DataManager(object):
     def _setLabels(self, Label=None):
         if 'Label' not in self.mainDataFrame.columns:
             self.mainDataFrame['Label'] = '' 
+            
+        if Label != None:
+            print 'Current Label set for:', Label
+            check_label = raw_input('Use this label? (Y/N): ')
+            while check_label not in ['y','Y', 'N','n']:
+                print 'Invalid input. Please use Y or N.'
+                check_label = raw_input('Use this label: {0}? (Y/N): '.format(Label))
+            if check_label.lower() == 'y': 
+                print 'Label {0} confirmed.'.format(Label)
+            else:
+                Label = raw_input('Please Enter New Label: ')
+                
         for i, src in enumerate(self.mainDataFrame['Source'].values):
             if self.mainDataFrame['Label'][i] == '':
                 if Label != None:
@@ -652,7 +674,7 @@ class DataManager(object):
         new_validIdx = []
         dateheader = self._checkforHeader('SampleDate')
         for idx in validIdx:
-            curDate = dt.datetime.strptime(self.Trawl_Data[dateheader].values[idx], '%m/%d/%Y %H:%M')
+            curDate = dt.datetime.strptime(self.Data[dateheader].values[idx], '%m/%d/%Y %H:%M')
             if curDate > self.startDate:
                 new_validIdx.append(idx)
 
@@ -953,7 +975,7 @@ class DataManager(object):
             Chronological_DataFrame = pd.DataFrame(columns=['Region', 'Group', 'StartDate', 'Source'])
             #check surveys vs num of data sources
             for i, datasource in enumerate(Chronological_data):
-                self._read_Trawl_Data(datasource)
+                self._read_data(datasource)
                 for region in self.regions:
                     for Group in self.Groups[i]:
                         startDate = self.get_StartDate(region, Group, self.GroupType)
@@ -971,17 +993,17 @@ class DataManager(object):
             Group_order = self._get_Group_Order(self.mainDataFrame)
             self._add_PlotOrder(Group_order)
             
-    def add_Dataset(self, _Data, load_order, datatype=None):
+    def add_Dataset(self, data, load_order, datatype=None):
         '''
         Reads in dataset and gets the main data, and then adds it to the master dataframe
         '''
-        self._read_Trawl_Data(Trawl_Data)
+        self._read_Data(data)
         
 #         if datatype in ['multipredicted', 'cohort','hatch', 'entrainment','condensed_predicted']:
 #             for region in self.regions:
 #                 if self.plottype == 'boxwhisker':
 #                     region_df = self._get_Region_Stats(region, 0, GroupType, datatype=datatype)
-#                     region_df['Source'] = os.path.basename(Trawl_Data).split('.')[0]
+#                     region_df['Source'] = os.path.basename(data).split('.')[0]
 #                     region_df['LoadOrder'] = load_order
 #                     region_df['GroupType'] = GroupType
 #                     self._merge_with_mainDataFrame(region_df)
@@ -991,7 +1013,7 @@ class DataManager(object):
         if datatype in ['temp']:
             if self.plottype == 'boxwhisker':
                 df = self._get_Stats(datatype=datatype)
-                df['Source'] = os.path.basename(Trawl_Data).split('.')[0]
+                df['Source'] = os.path.basename(data).split('.')[0]
                 df['LoadOrder'] = load_order
                 self._merge_with_mainDataFrame(df)
             self.mainDataFrame = self.mainDataFrame.reset_index(drop=True)
@@ -999,7 +1021,7 @@ class DataManager(object):
         else:
             if self.plottype == 'boxwhisker':
                 df = self._get_Stats(datatype=datatype)
-                df['Source'] = os.path.basename(Trawl_Data).split('.')[0]
+                df['Source'] = os.path.basename(data).split('.')[0]
                 if datatype == 'observed':
                     df['LoadOrder'] = 0
                 else:
@@ -1013,28 +1035,28 @@ class DataManager(object):
 #                 for Group in Groups:
 #                     if self.plottype == 'bar':
 #                         abundance, density, firstDate = self._get_Region_Stats(region, Group, GroupType, Sizes=self.Sizes, datatype=datatype)
-#                         density *= self._get_Density_Scalar(Trawl_Data)
+#                         density *= self._get_Density_Scalar(data)
 #                         self._append_mainDataframe(Region=region, Group=Group, GroupType=GroupType, StartDate=firstDate, LoadOrder=load_order,
-#                                                    Source=Trawl_Data, Abundance=abundance, Density=density)
+#                                                    Source=data, Abundance=abundance, Density=density)
 #                     elif self.plottype == 'boxwhisker':
 #                         q5, q25, q50, q75, q95 = self._get_Region_Stats(region, Group, GroupType, datatype=datatype)
-#                         self._append_mainDataframe(Region=region, Group=Group, GroupType=GroupType, Source=Trawl_Data, LoadOrder=load_order,
+#                         self._append_mainDataframe(Region=region, Group=Group, GroupType=GroupType, Source=data, LoadOrder=load_order,
 #                                                    q5=q5, q25=q25, q50=q50, q75=q75, q95=q95)
 #                     elif self.plottype == 'timeseries':
 #                         ts_data = self._get_Region_Stats(region, Group, GroupType, datatype=datatype)
-#                         self._append_mainDataframe(Region=region, Group=Group, GroupType=GroupType, Source=Trawl_Data, LoadOrder=load_order,
+#                         self._append_mainDataframe(Region=region, Group=Group, GroupType=GroupType, Source=data, LoadOrder=load_order,
 #                                                    Values=ts_data)
 
-    def InitializeData(self, _Data, datatype=None, Label=None):
+    def InitializeData(self, data, datatype=None, Label=None):
         '''
         Takes in a dataset and adds it to the main dataframe
         '''
         
-        if type(_Data) == str:
+        if type(data) == str:
             len_data = 1
-            _Data = [_Data]
-        elif type(_Data) == list:
-            len_data = len(_Data)
+            data = [data]
+        elif type(data) == list:
+            len_data = len(data)
         
 #         if datatype in ['entrainment']:
 #             self.Cohorts = self._check_groupingLength(len_data, self.Cohorts)
@@ -1042,7 +1064,7 @@ class DataManager(object):
 #             self.Surveys = self._check_groupingLength(len_data, self.Surveys)
        
         if datatype in ['total_predicted', 'total_observed', 'predicted', 'observed', 'entrainment', 'hatch']:
-            for i, data_Source in enumerate(_Data):
+            for i, data_Source in enumerate(data):
                 if self.plottype == 'boxwhisker':
                     self.add_Dataset(data_Source, i,  datatype=datatype)
                 elif self.plottype == 'bar':
@@ -1051,7 +1073,7 @@ class DataManager(object):
                     sys.exit(0)
         
         elif datatype == None: 
-            for i, data_Source in enumerate(_Data):
+            for i, data_Source in enumerate(data):
                 self.add_Dataset(data_Source, i, self.Groups[i], self.GroupType)
 #                     
         else:
@@ -1065,7 +1087,7 @@ class DataManager(object):
         else:
             self._setLabels(Label=Label)
         
-        print 'Added {0} Dataset(s)'.format(len(Trawl_Data))
+        print 'Added {0} Dataset(s)'.format(len(data))
                 
     def apply_Growth(self, GrowthRate):
         '''
@@ -1088,7 +1110,7 @@ class DataManager(object):
                 for index, row in dataFrame_Filter.iterrows():
                     current_Group = row['Group']
                     if source != row['Source']:
-                        self._read_Trawl_Data(row['Source']) #make sure you reopen the correct file, else it will use the last file
+                        self._read_data(row['Source']) #make sure you reopen the correct file, else it will use the last file
                     source = row['Source']
                     abundance, density, firstDate = self._get_Region_Stats(region, current_Group, self.GroupType, Sizes=calculated_sizes[i])
                     density *= self._get_Density_Scalar(source)
@@ -1108,7 +1130,7 @@ class DataManager(object):
 #         elif type(Dataset) == list:
 
         for i, datasource in enumerate(Dataset):
-            self._read_Trawl_Data(datasource)
+            self._read_Data(datasource)
             for region in self.regions:
                     for Survey in self.Surveys[i]:
                         if startdate != None:
@@ -1142,8 +1164,7 @@ class DataManager(object):
         Valid = []
         Predicted_Data['Survey'] = ''
         for obs_index, row in Observed_Data.iterrows():
-            valid_idx = [r for r, DFrow in Predicted_Data.iterrows() if DFrow['Date'] == row['Surveydate'] 
-                         and DFrow['Cohort'] == row['Cohort'] 
+            valid_idx = [r for r, DFrow in Predicted_Data.iterrows() if DFrow['Date'] == row['Date'] 
                          and DFrow['Region'] == row['Region']]
             Valid += valid_idx
             for i in valid_idx:
@@ -1167,7 +1188,7 @@ class DataManager(object):
         valid_idx = self._get_Valid_Idx(self.Year, 'Year', Filter=Survey_Idx)
         
         for index in valid_idx:
-            current_date = dt.datetime.strptime(self.Trawl_Data[dateheader].values[index], '%m/%d/%Y %H:%M')
+            current_date = dt.datetime.strptime(self.Data[dateheader].values[index], '%m/%d/%Y %H:%M')
             if current_date < Earliest_Group_Date:
                 Earliest_Group_Date = current_date
                     
@@ -1187,7 +1208,7 @@ class DataManager(object):
         valid_idx = self._get_Valid_Idx(self.Year, 'Year', Filter=Survey_Idx)
         
         for index in valid_idx:
-            current_date = dt.datetime.strptime(self.Trawl_Data[dateheader].values[index], '%m/%d/%Y %H:%M')
+            current_date = dt.datetime.strptime(self.Data[dateheader].values[index], '%m/%d/%Y %H:%M')
             if current_date > Latest_Group_Date:
                 Latest_Group_Date = current_date
                     

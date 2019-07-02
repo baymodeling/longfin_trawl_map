@@ -40,7 +40,8 @@ class LongfinMap(object):
                  year,
                  sizes,
                  Cohorts,
-                 Surveys):
+                 Surveys,
+                 title=''):
         self.run_dir = run_dir
         self.grd_file = grd_file
         self.Year = year
@@ -48,6 +49,7 @@ class LongfinMap(object):
         self.Cohorts = Cohorts
         self.Surveys = Surveys
         self.compare = False
+        self.title_str = title
         self._get_inputs()
 
     def _get_inputs(self):
@@ -99,6 +101,12 @@ class LongfinMap(object):
         
 #         self.xy_leg = [554742.1172539165,4275228.120412473]
         self.xy_leg = [547799.8896998921,4275000.017826721]
+        
+        if self.title_str == '':
+            print 'Please enter Title string modifier to be appended to title.'
+            print 'Title format is generally as follows (depends on plot type...)'
+            print 'title format example: Longfin Smelt, Cohort 1 Abundance 2013: {USER STRING HERE}'
+            self.title_str = raw_input('Please Enter Title string: ')
 
         return
     
@@ -872,23 +880,26 @@ class LongfinMap(object):
         ax.xaxis.set_visible(False)
         ax.yaxis.set_visible(False)
         if self.datatype == 'hatch':
-            title = '{0} Hatching'.format(self.Fishtype)
+            title = '{0} Hatching {1}: {2}'.format(self.Fishtype,self.Year,self.title_str)
         elif self.datatype == 'entrainment':
-            title = '{0} Entrainment'.format(self.Fishtype)
+            title = '{0} Entrainment {1}: {2}'.format(self.Fishtype,self.Year,self.title_str)
         elif self.datatype == 'fractional_entrainment':
             title = '{0} Fractional Entrainment'.format(self.Fishtype)
         elif self.datatype == 'cohort':
             title = '{0} Cohort {1}'.format(self.Fishtype, self.Cohort_Number)
-        else:
-            title = '{0} {1}mm to {2}mm {3}'.format(self.Fishtype, self.Sizes[0], self.Sizes[1], Var)
-        if self.compare:
+        elif self.compare:
             if self.Cohort_Number != 'Total':
-                title += ' Pred Vs Obs Cohort {0}'.format(self.Cohort_Number)
+#                 title += ' Pred Vs Obs Cohort {0}'.format(self.Cohort_Number)
+                title = '{0}, Cohort {1} {2} {3}: {4}'.format(self.Fishtype, self.Cohort_Number, Var, self.Year, self.title_str) 
             else:
-                title += ' Pred Vs Obs Cohort Total'
-        if self.Chronological:
-            title += ' Chronological'
-        title += ' {0}'.format(self.Year)
+                title = '{0}, Total Cohort {1} {2} {3}: {4}'.format(self.Fishtype, self.Cohort_Number, Var, self.Year, self.title_str) 
+        else:
+            title = '{0} {1}'.format(self.Fishtype, Var)
+#             title = '{0} {1}mm to {2}mm {3}'.format(self.Fishtype, self.Sizes[0], self.Sizes[1], Var)
+        
+#         if self.Chronological:
+#             title += ' Chronological'
+#         title += ' {0}'.format(self.Year)
         
         plt.title(title)
         
@@ -910,17 +921,19 @@ class LongfinMap(object):
         '''
         if not os.path.exists(r'Plots'):
             os.mkdir(r'Plots')
-        if self.datatype == None:
-            filename = '{0}_{1}_Size_{2}mm-{3}mm_{4}'.format(self.Year, self.plotType, self.Sizes[0], self.Sizes[1], Var)
-        elif self.datatype in ['hatch', 'entrainment', 'fractional_entrainment','multi']:
+#         if self.datatype == None:
+#             filename = '{0}_{1}_Size_{2}mm-{3}mm_{4}'.format(self.Year, self.plotType, self.Sizes[0], self.Sizes[1], Var)
+        if self.datatype in ['hatch', 'entrainment', 'fractional_entrainment']:
             filename = '{0}_{1}_{2}_{3}'.format(self.Year, self.plotType, Var, self.datatype.title())
         elif self.datatype in ['cohort']:
             filename = '{0}_{1}_Size_{2}mm-{3}mm_{4}_Cohort{5}'.format(self.Year, self.plotType, self.Sizes[0], self.Sizes[1], Var, self.Cohort_Number)
-        if self.compare:
+        elif self.datatype in ['multi']:
+            filename = '{0}_Cohort_{1}_{2}_{3}_{4}'.format(self.Year, self.Cohort_Number, self.plotType, Var, self.datatype.title())
+        elif self.compare:
             if self.Cohort_Number == 'Total':
-                filename += '_PredVsObs_Total'
+                filename = 'PredVsObs_Total_{0}_{1}'.format(self.Year, Var)
             else:
-                filename += '_PredVsObs_Cohort{0}'.format(self.Cohort_Number)
+                filename = 'PredVsObs_Cohort_{0}_{1}_{2}'.format(self.Cohort_Number, self.Year, Var)
         if self.Chronological:
             filename += '_Chronological'
         if self.Log:

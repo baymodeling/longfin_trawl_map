@@ -43,7 +43,7 @@ class LongfinPlotter(object):
                  run_dir,
                  grd_file,
                  year,
-                 sizes,
+                 sizes=None,
                  surveys=None,
                  cohorts=None):
         
@@ -183,7 +183,7 @@ class LongfinPlotter(object):
         print 'Reading in Predicted Data'
         Pred_data_Manager = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, 'Boxwhisker', '', 
                                        self.Cohorts, self.Surveys)
-        Pred_data_Manager.InitializeData(Pred_data_file, datatype='predicted', Label='Computed')
+        Pred_data_Manager.InitializeData(Pred_data_file, datatype='predicted', Label='Predicted')
         
         self.Cohorts = Pred_data_Manager.get_Cohorts(self.Cohorts)
         
@@ -265,7 +265,6 @@ class LongfinPlotter(object):
     def make_TotalPredvsObs_BoxWhisker(self,
                                        Obs_data_file,
                                        Pred_data_file,
-                                       Chronological_data,
                                        Var,
                                        Chronological=False,
                                        Log=False,
@@ -307,11 +306,10 @@ class LongfinPlotter(object):
         Obs_data_Manager = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, 'Boxwhisker', '', 
                                        self.Cohorts, self.Surveys)
         Obs_data_Manager.InitializeData(Obs_data_file, datatype='total_observed')
-        Obs_data_Manager.get_Dates(Chronological_data)
         print 'Reading in Predicted Data'
         Pred_data_Manager = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, 'Boxwhisker', '', 
                                        self.Cohorts, self.Surveys)
-        Pred_data_Manager.InitializeData(Pred_data_file, datatype='total_predicted', Label='Computed')
+        Pred_data_Manager.InitializeData(Pred_data_file, datatype='total_predicted', Label='Predicted')
     
         print self.Surveys
         Obs_data = Obs_data_Manager.get_DataFrame()
