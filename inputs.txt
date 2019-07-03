@@ -1,0 +1,56 @@
+###############################################################################
+# The following file acts as inputs for the different Longfin plotter scripts #
+# In the event that an input is not present in this file, the script will     #
+# prompt the user for input. Filling out this file will help automate         #
+# proccesses for many script runs. Each script will have its own inputs and   #
+# no inputs will overlap.                                                     #
+###############################################################################
+
+###############################################################################
+# Predicted Vs Observed Boxwhisker (PVO)                                      #
+# The following inputs are allowed for PVO plots:                             #
+#     - PVO_Title                                                             #
+#     - PVO_Obs_Label                                                         #
+#     - PVO_Pred_Label                                                        #
+###############################################################################
+PVO_Title=Test File
+PVO_Obs_Label=Observed
+PVO_Pred_Label=Predicted
+
+###############################################################################
+# Total Predicted Vs Observed Boxwhisker (TPVTO)                              #
+# The following inputs are allowed for TPVTO plots:                           #
+#     - TPVTO_Title                                                           #
+#     - TPVTO_Obs_Label                                                       #
+#     - TPVTO_Pred_Label                                                      #
+###############################################################################
+TPVTO_Title=Test File
+TPVTO_Obs_Label=Observed
+TPVTO_Pred_Label=Predicted
+
+###############################################################################
+# Multi Predicted Vs Observed Boxwhisker (MULTI)                              #
+# The following inputs are allowed for MULTI plots:                           #
+#     - MULTI_Title                                                           #
+#     - MULTI_Obs_Label                                                       #
+#     - MULTI_Pred_Label_A                                                    #
+#     - MULTI_Pred_Label_B                                                    #
+###############################################################################
+MULTI_Title=Test File
+MULTI_Obs_Label=Observed
+MULTI_Pred_Label=Predicted A
+MULTI_Pred_Label=Predicted B
+
+###############################################################################
+# Entrainment Boxwhisker (ENT)                                                #
+# The following inputs are allowed for ENT plots:                             #
+#     - ENT_Title                                                             #
+###############################################################################
+ENT_Title=Test File
+
+###############################################################################
+# Regional Hatch Boxwhisker (HATCH)                                           #
+# The following inputs are allowed for HATCH plots:                           #
+#     - HATCH_Title                                                           #
+###############################################################################
+HATCH_Title=Test File

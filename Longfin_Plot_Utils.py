@@ -102,11 +102,12 @@ class LongfinMap(object):
 #         self.xy_leg = [554742.1172539165,4275228.120412473]
         self.xy_leg = [547799.8896998921,4275000.017826721]
         
-        if self.title_str == '':
-            print 'Please enter Title string modifier to be appended to title.'
-            print 'Title format is generally as follows (depends on plot type...)'
-            print 'title format example: Longfin Smelt, Cohort 1 Abundance 2013: {USER STRING HERE}'
-            self.title_str = raw_input('Please Enter Title string: ')
+#        code for user input on title. currently disabled
+#         if self.title_str == '':
+#             print 'Please enter Title string modifier to be appended to title.'
+#             print 'Title format is generally as follows (depends on plot type...)'
+#             print 'title format example: Longfin Smelt, Cohort 1 Abundance 2013: {USER STRING HERE}'
+#             self.title_str = raw_input('Please Enter Title string: ')
 
         return
     
@@ -997,7 +998,7 @@ class LongfinMap(object):
         self._add_GrowthText(ax, GrowthRate)
         self._add_StartDate_Text(ax)
         
-    def plot_boxwhisker(self, dataFrame, Var, Chronological, Log, Fishtype, datatype=None, cohortNum=0, max=0.):
+    def plot_boxwhisker(self, dataFrame, Var, Chronological, Log, Fishtype, datatype=None, cohortNum=0, max=0.,titlestr=None):
         '''
         Adds subplots for each specified region and adds a new subplot for the data.
         Takes in organized Pandas dataFrame grabs data based on Var.
@@ -1008,6 +1009,7 @@ class LongfinMap(object):
         self.Chronological = Chronological
         self.Cohort_Number=cohortNum
         self.datatype = datatype
+        self.title_str = titlestr
         
         if self.datatype in ['entrainment', 'hatch']:
             self.Total_Groups = len(dataFrame.Cohort.unique())
@@ -1039,7 +1041,7 @@ class LongfinMap(object):
             if len(region_data) == 0:
                 for i in range(self.Total_Groups):
                     region_data = region_data.append({'Region': region,
-                                                      'Cohort': i},
+                                                      'Cohort': i+1},
                                                       ignore_index=True)
 
             labels = self._get_Plot_Labels(region_data)
@@ -1054,7 +1056,7 @@ class LongfinMap(object):
             
         self._add_Legend(fig, ax, boxsize, region_data, Var, Plot_maximum)
         
-    def plot_ObsVsPred_Boxwhisker(self, dataFrame, Var, Chronological, Cohort_Number, Log, Fishtype, datatype=None, max=0.):
+    def plot_ObsVsPred_Boxwhisker(self, dataFrame, Var, Chronological, Cohort_Number, Log, Fishtype, datatype=None, max=0., titlestr=None):
         '''
         Adds subplots for each specified region and adds a new subplot for the data.
         Takes in organized Pandas dataFrame grabs data based on Var.
@@ -1068,6 +1070,7 @@ class LongfinMap(object):
         self.datatype = datatype
         self.Fishtype = Fishtype
         self.Sources = dataFrame.Source.unique()
+        self.title_str = titlestr
         self._get_colors()
         boxsize = [10000.,10000.] #Check this
         
@@ -1096,7 +1099,7 @@ class LongfinMap(object):
             
         self._add_Legend(fig, ax, boxsize, region_data, Var, Plot_maximum)
         
-    def plot_MultiObsVsPred_Boxwhisker(self, dataFrame, Var, Chronological, Cohort_Number, Log, Fishtype, datatype=None, max=0.):
+    def plot_MultiObsVsPred_Boxwhisker(self, dataFrame, Var, Chronological, Cohort_Number, Log, Fishtype, datatype=None, max=0., titlestr=None):
         '''
         Adds subplots for each specified region and adds a new subplot for the data.
         Takes in organized Pandas dataFrame grabs data based on Var.
@@ -1112,6 +1115,7 @@ class LongfinMap(object):
         self.Data_labels = dataFrame.Label.unique()
         self.datatype = datatype
         self.Fishtype = Fishtype
+        self.title_str = titlestr
         self._get_colors()
 
         boxsize = [10000.,10000.] #Check this

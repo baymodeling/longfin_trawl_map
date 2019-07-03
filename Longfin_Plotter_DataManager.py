@@ -626,21 +626,26 @@ class DataManager(object):
         if 'Label' not in self.mainDataFrame.columns:
             self.mainDataFrame['Label'] = '' 
             
-        if Label != None:
-            print 'Current Label set for:', Label
-            check_label = raw_input('Use this label? (Y/N): ')
-            while check_label not in ['y','Y', 'N','n']:
-                print 'Invalid input. Please use Y or N.'
-                check_label = raw_input('Use this label: {0}? (Y/N): '.format(Label))
-            if check_label.lower() == 'y': 
-                print 'Label {0} confirmed.'.format(Label)
-            else:
-                Label = raw_input('Please Enter New Label: ')
-                
+#Code to get user input on labels. disabled.
+#         if Label != None: 
+#             print 'Current Label set for:', Label
+#             check_label = raw_input('Use this label? (Y/N): ')
+#             while check_label not in ['y','Y', 'N','n']:
+#                 print 'Invalid input. Please use Y or N.'
+#                 check_label = raw_input('Use this label: {0}? (Y/N): '.format(Label))
+#             if check_label.lower() == 'y': 
+#                 print 'Label {0} confirmed.'.format(Label)
+#             else:
+#                 Label = raw_input('Please Enter New Label: ')
+        src_un = self.mainDataFrame.Source.unique().tolist()
         for i, src in enumerate(self.mainDataFrame['Source'].values):
             if self.mainDataFrame['Label'][i] == '':
                 if Label != None:
-                    self._update_mainDataFrame(i, {'Label': Label})
+                    if type(Label) == list:
+                        Li = src_un.index(src)
+                        self._update_mainDataFrame(i, {'Label': Label[Li]})
+                    else:
+                        self._update_mainDataFrame(i, {'Label': Label})
                 else:
                     self._update_mainDataFrame(i, {'Label': self.Source_IDs[src]})
                 
@@ -1079,7 +1084,7 @@ class DataManager(object):
         else:
             print 'unknown datatype. Now Exiting...'
             sys.exit(0)
-            
+         
             
         if Label == None:
             self._getLabels()
