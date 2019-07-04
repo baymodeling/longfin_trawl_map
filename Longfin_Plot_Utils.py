@@ -998,7 +998,7 @@ class LongfinMap(object):
         self._add_GrowthText(ax, GrowthRate)
         self._add_StartDate_Text(ax)
         
-    def plot_boxwhisker(self, dataFrame, Var, Chronological, Log, Fishtype, datatype=None, cohortNum=0, max=0.,titlestr=None):
+    def plot_boxwhisker(self, dataFrame, Var, Chronological, Log, Fishtype, datatype=None, cohortNum=0, max=0.):
         '''
         Adds subplots for each specified region and adds a new subplot for the data.
         Takes in organized Pandas dataFrame grabs data based on Var.
@@ -1009,7 +1009,6 @@ class LongfinMap(object):
         self.Chronological = Chronological
         self.Cohort_Number=cohortNum
         self.datatype = datatype
-        self.title_str = titlestr
         
         if self.datatype in ['entrainment', 'hatch']:
             self.Total_Groups = len(dataFrame.Cohort.unique())
@@ -1056,7 +1055,7 @@ class LongfinMap(object):
             
         self._add_Legend(fig, ax, boxsize, region_data, Var, Plot_maximum)
         
-    def plot_ObsVsPred_Boxwhisker(self, dataFrame, Var, Chronological, Cohort_Number, Log, Fishtype, datatype=None, max=0., titlestr=None):
+    def plot_ObsVsPred_Boxwhisker(self, dataFrame, Var, Chronological, Cohort_Number, Log, Fishtype, datatype=None, max=0.):
         '''
         Adds subplots for each specified region and adds a new subplot for the data.
         Takes in organized Pandas dataFrame grabs data based on Var.
@@ -1070,7 +1069,6 @@ class LongfinMap(object):
         self.datatype = datatype
         self.Fishtype = Fishtype
         self.Sources = dataFrame.Source.unique()
-        self.title_str = titlestr
         self._get_colors()
         boxsize = [10000.,10000.] #Check this
         
@@ -1099,7 +1097,7 @@ class LongfinMap(object):
             
         self._add_Legend(fig, ax, boxsize, region_data, Var, Plot_maximum)
         
-    def plot_MultiObsVsPred_Boxwhisker(self, dataFrame, Var, Chronological, Cohort_Number, Log, Fishtype, datatype=None, max=0., titlestr=None):
+    def plot_MultiObsVsPred_Boxwhisker(self, dataFrame, Var, Chronological, Cohort_Number, Log, Fishtype, datatype=None, max=0.):
         '''
         Adds subplots for each specified region and adds a new subplot for the data.
         Takes in organized Pandas dataFrame grabs data based on Var.
@@ -1115,7 +1113,6 @@ class LongfinMap(object):
         self.Data_labels = dataFrame.Label.unique()
         self.datatype = datatype
         self.Fishtype = Fishtype
-        self.title_str = titlestr
         self._get_colors()
 
         boxsize = [10000.,10000.] #Check this

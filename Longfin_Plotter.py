@@ -45,13 +45,14 @@ class LongfinPlotter(object):
                  year,
                  sizes=None,
                  surveys=None,
-                 cohorts=None):
+                 cohorts=None,
+                 title=''):
         
         self.Year = year
         self.Sizes = sizes
         self.Surveys = surveys 
         self.Cohorts = cohorts
-        self.Map_Utils = LongfinMap(run_dir, grd_file, self.Year, self.Sizes, self.Cohorts, self.Surveys) #Create map class object
+        self.Map_Utils = LongfinMap(run_dir, grd_file, self.Year, self.Sizes, self.Cohorts, self.Surveys, title=title) #Create map class object
 #         self.Map_Utils.Total_Groups = self.Groups
 
     def get_inputs(self, flag):
@@ -145,13 +146,13 @@ class LongfinPlotter(object):
         Log: Plots data with a log scale instead of a true scale. Can make data with a large variation easier to view. 
         Max: set a max value used for plotting. Otherwise use the highest q50 value.
         '''
-        
-        if datatype == 'entrainment':
-            inputs = self.get_inputs('ENT')
-            title_str = inputs['ENT_Title']
-        elif datatype == 'hatch':
-            inputs = self.get_inputs('HATCH')
-            title_str = inputs['HATCH_Title']
+        if self.Map_Utils.title_str == '':
+            if datatype == 'entrainment':
+                inputs = self.get_inputs('ENT')
+                self.Map_Utils.title_str = inputs['ENT_Title']
+            elif datatype == 'hatch':
+                inputs = self.get_inputs('HATCH')
+                self.Map_Utils.title_str = inputs['HATCH_Title']
         bw_data =  DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, 'Boxwhisker', '', 
                                self.Cohorts, self.Surveys)
         bw_data.InitializeData(Trawl_Data, datatype=datatype, Label='Computed')
@@ -159,7 +160,7 @@ class LongfinPlotter(object):
 #             bw_data.apply_Chronological(Chronological, Chronological_data=Chronological_data)
         dataframe = bw_data.get_DataFrame()
         dataframe = bw_data.Organize_Data(dataframe, datatype)
-        self.Map_Utils.plot_boxwhisker(dataframe, Var, Chronological, Log, Fishtype, datatype=datatype, max=max,titlestr=title_str)
+        self.Map_Utils.plot_boxwhisker(dataframe, Var, Chronological, Log, Fishtype, datatype=datatype, max=max)
         self.Map_Utils.savePlot(Var)
     
     
@@ -170,7 +171,10 @@ class LongfinPlotter(object):
                                   Chronological=False,
                                   Log=False,
                                   max=0.,
-                                  Fishtype='Longfin Smelt'):
+                                  Fishtype='Longfin Smelt',
+                                  Obs_Label=None,
+                                  Pred_Label=None
+                                  ):
         '''
         Creates boxwhisker plots for properly set up data. Instead of coming from trawl observed data,
         data is post processed into csv files containing the q5, q25, q50, q75, and q95 (q meaning quantile)
@@ -203,16 +207,20 @@ class LongfinPlotter(object):
         '''
     
         print 'Reading in Observed File...'
-
-        inputs = self.get_inputs('PVO')
+        
+        if Obs_Label==None and Pred_Label == None:
+            inputs = self.get_inputs('PVO')
+            Obs_Label = inputs['PVO_Obs_Label']
+            Pred_Label = inputs['PVO_Pred_Label']
+            self.Map_Utils.title_str = inputs['PVO_Title']
 
         Obs_data_Manager = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, 'Boxwhisker', '', 
                                        self.Cohorts, self.Surveys)
-        Obs_data_Manager.InitializeData(Obs_data_file, datatype='observed', Label=inputs['PVO_Obs_Label'])
+        Obs_data_Manager.InitializeData(Obs_data_file, datatype='observed', Label=Obs_Label)
         print 'Reading in Predicted Data'
         Pred_data_Manager = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, 'Boxwhisker', '', 
                                        self.Cohorts, self.Surveys)
-        Pred_data_Manager.InitializeData(Pred_data_file, datatype='predicted', Label=inputs['PVO_Pred_Label'])
+        Pred_data_Manager.InitializeData(Pred_data_file, datatype='predicted', Label=Pred_Label)
         
         self.Cohorts = Pred_data_Manager.get_Cohorts(self.Cohorts)
         
@@ -224,7 +232,7 @@ class LongfinPlotter(object):
             Pred_data = Pred_data_Manager.get_DataFrame(cohort=cohort)
             dataframe = Pred_data_Manager.Coordinate_Data(Pred_data, Obs_data)
             dataframe = Pred_data_Manager.Filter_by_Surveys(dataframe, cohort_surveys)
-            self.Map_Utils.plot_ObsVsPred_Boxwhisker(dataframe, Var, Chronological, cohort, Log, Fishtype, max=max, titlestr=inputs['PVO_Title'])
+            self.Map_Utils.plot_ObsVsPred_Boxwhisker(dataframe, Var, Chronological, cohort, Log, Fishtype, max=max)
             self.Map_Utils.savePlot(Var)
             
     def make_MultiPredvsObs_BoxWhisker(self,
@@ -234,7 +242,9 @@ class LongfinPlotter(object):
                                   Chronological=False,
                                   Log=False,
                                   max=0.,
-                                  Fishtype='Longfin Smelt'):
+                                  Fishtype='Longfin Smelt',
+                                  Obs_Label=None,
+                                  Pred_Labels=None):
         '''
         Creates boxwhisker plots for properly set up data. Instead of coming from trawl observed data,
         data is post processed into csv files containing the q5, q25, q50, q75, and q95 (q meaning quantile)
@@ -268,18 +278,23 @@ class LongfinPlotter(object):
         Max: set a max value used for plotting. Otherwise use the highest q50 value.
         '''
         
-        inputs = self.get_inputs('MULTI')
+        if Obs_Label==None and Pred_Labels == None:
+            inputs = self.get_inputs('MULTI')
+            Obs_Label = inputs['MULTI_Obs_Label']
+            Pred_Labels = inputs['MULTI_Pred_Label']
+            self.Map_Utils.title_str = inputs['MULTI_Title']
+
         
         print 'Reading in Observed File...'
  
         
         Obs_data_Manager = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, 'Boxwhisker', '', 
                                        self.Cohorts, self.Surveys)
-        Obs_data_Manager.InitializeData(Obs_data_file, datatype='observed', Label=inputs['MULTI_Obs_Label'])
+        Obs_data_Manager.InitializeData(Obs_data_file, datatype='observed', Label=Obs_Label)
         print 'Reading in Predicted Data'
         Pred_data_Manager = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, 'Boxwhisker', '', 
                                        self.Cohorts, self.Surveys)
-        Pred_data_Manager.InitializeData(Pred_data_list, datatype='predicted', Label=inputs['MULTI_Pred_Label'])
+        Pred_data_Manager.InitializeData(Pred_data_list, datatype='predicted', Label=Pred_Labels)
         
         self.Cohorts = Pred_data_Manager.get_Cohorts(self.Cohorts)
         
@@ -291,7 +306,7 @@ class LongfinPlotter(object):
             Pred_data = Pred_data_Manager.get_DataFrame(cohort=cohort)
             dataframe = Pred_data_Manager.Coordinate_Data(Pred_data, Obs_data)
             dataframe = Pred_data_Manager.Filter_by_Surveys(dataframe, cohort_surveys)
-            self.Map_Utils.plot_MultiObsVsPred_Boxwhisker(dataframe, Var, Chronological, cohort, Log, Fishtype, datatype='multi', max=max, titlestr=inputs['MULTI_Title'])
+            self.Map_Utils.plot_MultiObsVsPred_Boxwhisker(dataframe, Var, Chronological, cohort, Log, Fishtype, datatype='multi', max=max)
             self.Map_Utils.savePlot(Var)
 
 
@@ -302,7 +317,9 @@ class LongfinPlotter(object):
                                        Chronological=False,
                                        Log=False,
                                        max=0.,
-                                       Fishtype='Longfin Smelt'):
+                                       Fishtype='Longfin Smelt',
+                                       Obs_Label=None,
+                                       Pred_Label=None):                            
         '''
         Creates boxwhisker plots for properly set up data. Instead of coming from trawl observed data,
         data is post processed into csv files containing the q5, q25, q50, q75, and q95 (q meaning quantile)
@@ -334,24 +351,28 @@ class LongfinPlotter(object):
         Max: set a max value used for plotting. Otherwise use the highest q50 value.        
         '''
         
-        inputs = self.get_inputs('TPVTO')
+        if Obs_Label==None and Pred_Label == None:
+            inputs = self.get_inputs('TPVTO')
+            Obs_Label = inputs['TPVTO_Obs_Label']
+            Pred_Label = inputs['TPVTO_Pred_Label']
+            self.Map_Utils.title_str = inputs['TPVTO_Title']
         
         print 'Reading in Observed File...'
 
         Obs_data_Manager = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, 'Boxwhisker', '', 
                                        self.Cohorts, self.Surveys)
-        Obs_data_Manager.InitializeData(Obs_data_file, datatype='total_observed', Label=inputs['TPVTO_Obs_Label'])
+        Obs_data_Manager.InitializeData(Obs_data_file, datatype='total_observed', Label=Obs_Label)
         print 'Reading in Predicted Data'
         Pred_data_Manager = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, 'Boxwhisker', '', 
                                        self.Cohorts, self.Surveys)
-        Pred_data_Manager.InitializeData(Pred_data_file, datatype='total_predicted', Label=inputs['TPVTO_Pred_Label'])
+        Pred_data_Manager.InitializeData(Pred_data_file, datatype='total_predicted', Label=Pred_Label)
     
         print self.Surveys
         Obs_data = Obs_data_Manager.get_DataFrame()
         Pred_data = Pred_data_Manager.get_DataFrame()
         dataframe = Pred_data_Manager.Coordinate_Data(Pred_data, Obs_data)
         dataframe = Pred_data_Manager.Filter_by_Surveys(dataframe, self.Surveys)
-        self.Map_Utils.plot_ObsVsPred_Boxwhisker(dataframe, Var, Chronological, 'Total', Log, Fishtype, max=max, titlestr=inputs['TPVTO_Title'])
+        self.Map_Utils.plot_ObsVsPred_Boxwhisker(dataframe, Var, Chronological, 'Total', Log, Fishtype, max=max)
         self.Map_Utils.savePlot(Var)
         
         
