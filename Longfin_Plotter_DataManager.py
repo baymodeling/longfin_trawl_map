@@ -602,6 +602,7 @@ class DataManager(object):
             converted_datestr.append(date_string)
         
         return converted_datestr
+    
 
     def _getLabels(self):
         if 'Label' not in self.mainDataFrame.columns:
@@ -1275,6 +1276,17 @@ class DataManager(object):
                 dataframe.drop(i, inplace=True)
         return dataframe
     
+    def Filter_by_HatchDate(self, dataframe):
+        hatchdate = dataframe.Hatchstart.unique()
+        if len(hatchdate) > 1:
+            print 'Number of hatchdates for Cohort {0} exceeds 1.'
+            print 'Please check data and try again.'
+            sys.exit(0)
+        for i, row in dataframe.iterrows():
+            if row['Date'] < hatchdate[0]:
+                dataframe.drop(i, inplace=True)
+        return dataframe
+    
     def Organize_Data(self, dataframe, datatype):
         if datatype in ['entrainment']:
             last_cohort_date = {}
@@ -1297,3 +1309,4 @@ class DataManager(object):
         
         else:
             return dataframe
+        

@@ -46,12 +46,14 @@ class LongfinPlotter(object):
                  sizes=None,
                  surveys=None,
                  cohorts=None,
-                 title=''):
+                 title='',
+                 output_directory=''):
         
         self.Year = year
         self.Sizes = sizes
         self.Surveys = surveys 
         self.Cohorts = cohorts
+        self.output_directory = output_directory
         self.Map_Utils = LongfinMap(run_dir, grd_file, self.Year, self.Sizes, self.Cohorts, self.Surveys, title=title) #Create map class object
 #         self.Map_Utils.Total_Groups = self.Groups
 
@@ -226,14 +228,13 @@ class LongfinPlotter(object):
         
         for i, cohort in enumerate(self.Cohorts):
             print 'Creating Plot for Cohort {0}...'.format(cohort)
-            cohort_surveys = self.Surveys[i:]
-            print cohort_surveys
+
             Obs_data = Obs_data_Manager.get_DataFrame(cohort=cohort)
             Pred_data = Pred_data_Manager.get_DataFrame(cohort=cohort)
             dataframe = Pred_data_Manager.Coordinate_Data(Pred_data, Obs_data)
-            dataframe = Pred_data_Manager.Filter_by_Surveys(dataframe, cohort_surveys)
+            dataframe = Pred_data_Manager.Filter_by_HatchDate(dataframe)
             self.Map_Utils.plot_ObsVsPred_Boxwhisker(dataframe, Var, Chronological, cohort, Log, Fishtype, max=max)
-            self.Map_Utils.savePlot(Var)
+            self.Map_Utils.savePlot(Var, self.output_directory)
             
     def make_MultiPredvsObs_BoxWhisker(self,
                                   Obs_data_file,
@@ -300,12 +301,10 @@ class LongfinPlotter(object):
         
         for i, cohort in enumerate(self.Cohorts):
             print 'Creating Plot for Cohort {0}...'.format(cohort)
-            cohort_surveys = self.Surveys[i:]
-            print cohort_surveys
             Obs_data = Obs_data_Manager.get_DataFrame(cohort=cohort)
             Pred_data = Pred_data_Manager.get_DataFrame(cohort=cohort)
             dataframe = Pred_data_Manager.Coordinate_Data(Pred_data, Obs_data)
-            dataframe = Pred_data_Manager.Filter_by_Surveys(dataframe, cohort_surveys)
+            dataframe = Pred_data_Manager.Filter_by_HatchDate(dataframe)
             self.Map_Utils.plot_MultiObsVsPred_Boxwhisker(dataframe, Var, Chronological, cohort, Log, Fishtype, datatype='multi', max=max)
             self.Map_Utils.savePlot(Var)
 
@@ -371,7 +370,7 @@ class LongfinPlotter(object):
         Obs_data = Obs_data_Manager.get_DataFrame()
         Pred_data = Pred_data_Manager.get_DataFrame()
         dataframe = Pred_data_Manager.Coordinate_Data(Pred_data, Obs_data)
-        dataframe = Pred_data_Manager.Filter_by_Surveys(dataframe, self.Surveys)
+        dataframe = Pred_data_Manager.Filter_by_HatchDate(dataframe)
         self.Map_Utils.plot_ObsVsPred_Boxwhisker(dataframe, Var, Chronological, 'Total', Log, Fishtype, max=max)
         self.Map_Utils.savePlot(Var)
         

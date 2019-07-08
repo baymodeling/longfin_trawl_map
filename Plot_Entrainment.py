@@ -15,8 +15,10 @@ grd_file = os.path.join(run_dir, 'ptm.grd')
 year = 2013
 Var = 'Larvae'
 Title = 'Test Run'
+output_directory = 'Test_Directory'
+fishtype = 'Delta Smelt'
 Pred_data = r"C:\git\longfin_trawl_map\lfsmelt_2013_5mm_18mm_max_0.20grow\lfsmelt_2013_5mm_18mm_max_0.20grow\results\predicted_cohort_source_entrainment_quantiles.csv"
 cohorts = [1,2,3,4,5,6]
 max = 20000000.
-lfp = LongfinPlotter(run_dir, grd_file, year, cohorts=cohorts, title=Title)
-lfp.make_BoxWhisker(Pred_data, Var, datatype='entrainment', Log=False, max=max)
+lfp = LongfinPlotter(run_dir, grd_file, year, cohorts=cohorts, title=Title,output_directory=output_directory)
+lfp.make_BoxWhisker(Pred_data, Var, datatype='entrainment', Log=False, max=max,Fishtype=fishtype)

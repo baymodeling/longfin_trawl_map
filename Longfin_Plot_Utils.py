@@ -916,12 +916,19 @@ class LongfinMap(object):
         return ax, fig
         
 
-    def savePlot(self, Var):
+    def savePlot(self, Var, output_directory):
         '''
         Sets up a plot name depending on variables
         '''
-        if not os.path.exists(r'Plots'):
-            os.mkdir(r'Plots')
+        
+        if output_directory == '':
+            if not os.path.exists(r'Plots'):
+                os.mkdir(r'Plots')
+            output_dir = r'Plots'
+        else:
+            if not os.path.exists(output_directory):
+                os.mkdir(output_directory)
+            output_dir = output_directory
 #         if self.datatype == None:
 #             filename = '{0}_{1}_Size_{2}mm-{3}mm_{4}'.format(self.Year, self.plotType, self.Sizes[0], self.Sizes[1], Var)
         if self.datatype in ['hatch', 'entrainment', 'fractional_entrainment']:
@@ -939,7 +946,7 @@ class LongfinMap(object):
             filename += '_Chronological'
         if self.Log:
             filename += '_Log'
-        self.filename = 'Plots\{0}.png'.format(filename)
+        self.filename = os.path.join(output_dir, '{0}.png'.format(filename))
         plt.savefig(self.filename, dpi=900, facecolor='white',bbox_inches='tight')
         plt.close()
         plt.clf()

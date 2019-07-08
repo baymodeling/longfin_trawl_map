@@ -18,7 +18,8 @@ year = 2013
 
 surveys = [1,2,3,4,5,6]
 cohorts = [1,2,3,4,5,6]
-
+output_directory = 'Test_Directory'
+fishtype = 'Delta Smelt'
 
 
 #plot pred vs obs
@@ -28,8 +29,8 @@ Obs_Label = 'Test_Observed'
 Pred_Label = 'Test_Predicted'
 Obs_data = os.path.join(data_dir, "observed_cohort_abundance_quantiles.csv")
 Pred_data = os.path.join(data_dir, "predicted_cohort_abundance_quantiles.csv")
-lfp = LongfinPlotter(run_dir, grd_file, year, surveys=surveys, cohorts=cohorts, title=Title)
-lfp.make_PredvsObs_BoxWhisker(Obs_data, Pred_data, Var, Log=False, Obs_Label=Obs_Label, Pred_Label=Pred_Label)
+lfp = LongfinPlotter(run_dir, grd_file, year, surveys=surveys, cohorts=cohorts, title=Title, output_directory=output_directory)
+lfp.make_PredvsObs_BoxWhisker(Obs_data, Pred_data, Var, Log=False, Obs_Label=Obs_Label, Pred_Label=Pred_Label, Fishtype=fishtype)
 
 
 
@@ -38,16 +39,16 @@ Var = 'Larvae'
 Title = 'Test Run'
 Pred_Entrainment_data = os.path.join(data_dir, "predicted_cohort_source_entrainment_quantiles.csv")
 max = 20000000.
-lfp = LongfinPlotter(run_dir, grd_file, year, cohorts=cohorts, title=Title)
-lfp.make_BoxWhisker(Pred_Entrainment_data, Var, datatype='entrainment', Log=False, max=max)
+lfp = LongfinPlotter(run_dir, grd_file, year, cohorts=cohorts, title=Title, output_directory=output_directory)
+lfp.make_BoxWhisker(Pred_Entrainment_data, Var, datatype='entrainment', Log=False, max=max, Fishtype=fishtype)
 
 #plot regional hatch
 Pred_hatch_data = os.path.join(data_dir, "cohort_hatch_quantiles.csv")
 max=5000000000.
 Var = 'Larvae'
 Title = 'Test Run'
-lfp = LongfinPlotter(run_dir, grd_file, year, cohorts=cohorts, title=Title)
-lfp.make_BoxWhisker(Pred_hatch_data, Var, datatype='hatch', Log=False, max=max)
+lfp = LongfinPlotter(run_dir, grd_file, year, cohorts=cohorts, title=Title, output_directory=output_directory)
+lfp.make_BoxWhisker(Pred_hatch_data, Var, datatype='hatch', Log=False, max=max, Fishtype=fishtype)
 
 
 #total Plots
@@ -57,5 +58,5 @@ Obs_Label = 'Test_Observed'
 Pred_Label = 'Test_Predicted'
 Obs_total_data = os.path.join(data_dir, "observed_total_abundance_quantiles.csv")
 Pred_total_data = os.path.join(data_dir, "predicted_total_abundance_quantiles.csv")
-lfp = LongfinPlotter(run_dir, grd_file, year, surveys=surveys, title=Title)
-lfp.make_TotalPredvsObs_BoxWhisker(Obs_total_data, Pred_total_data, Var, Log=False, Obs_Label=Obs_Label, Pred_Label=Pred_Label)
+lfp = LongfinPlotter(run_dir, grd_file, year, surveys=surveys, title=Title, output_directory=output_directory)
+lfp.make_TotalPredvsObs_BoxWhisker(Obs_total_data, Pred_total_data, Var, Log=False, Obs_Label=Obs_Label, Pred_Label=Pred_Label, Fishtype=fishtype)

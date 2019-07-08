@@ -17,6 +17,8 @@ Pred_data = r"C:\git\longfin_trawl_map\lfsmelt_2013_5mm_18mm_max_0.20grow\lfsmel
 surveys = [1,2,3,4,5,6]
 Obs_Label = 'Test_Observed'
 Pred_Label = 'Test_Predicted'
+output_directory = 'Test_Directory'
+fishtype = 'Delta Smelt'
  
-lfp = LongfinPlotter(run_dir, grd_file, year, surveys=surveys, title=Title)
-lfp.make_TotalPredvsObs_BoxWhisker(Obs_data, Pred_data, Var, Log=False,  Obs_Label=Obs_Label, Pred_Label=Pred_Label)
+lfp = LongfinPlotter(run_dir, grd_file, year, surveys=surveys, title=Title, output_directory=output_directory)
+lfp.make_TotalPredvsObs_BoxWhisker(Obs_data, Pred_data, Var, Log=False,  Obs_Label=Obs_Label, Pred_Label=Pred_Label, Fishtype=fishtype)
