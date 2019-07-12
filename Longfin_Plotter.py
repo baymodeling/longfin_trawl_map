@@ -210,6 +210,9 @@ class LongfinPlotter(object):
     
         print 'Reading in Observed File...'
         
+#         hatching_period = 15
+        hatching_period = 0
+        
         if Obs_Label==None and Pred_Label == None:
             inputs = self.get_inputs('PVO')
             Obs_Label = inputs['PVO_Obs_Label']
@@ -231,7 +234,7 @@ class LongfinPlotter(object):
 
             Obs_data = Obs_data_Manager.get_DataFrame(cohort=cohort)
             Pred_data = Pred_data_Manager.get_DataFrame(cohort=cohort)
-            dataframe = Pred_data_Manager.Coordinate_Data(Pred_data, Obs_data)
+            dataframe = Pred_data_Manager.Coordinate_Data(Pred_data, Obs_data, hatching_period=hatching_period)
             dataframe = Pred_data_Manager.Filter_by_HatchDate(dataframe)
             self.Map_Utils.plot_ObsVsPred_Boxwhisker(dataframe, Var, Chronological, cohort, Log, Fishtype, max=max)
             self.Map_Utils.savePlot(Var, self.output_directory)

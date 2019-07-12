@@ -726,6 +726,7 @@ class LongfinMap(object):
                 else:
                     bw_pos = list(np.arange(0, len(DataFrame)*1.5))
                     del bw_pos[2::3]
+                    print len(plt_data), len(bw_pos)
                     box1 = ax.bxp(plt_data, positions=bw_pos, showfliers=False, patch_artist=True)
                     for pn, patch in enumerate(box1['boxes']):
                         if pn % 2 == 0:
@@ -1086,13 +1087,13 @@ class LongfinMap(object):
         else:
             Plot_maximum = self._get_Plot_Scale(dataFrame, Var)
         
-        dataFrame = dataFrame.sort_values(by=['Region', 'Survey'])
+        dataFrame = dataFrame.sort_values(by=['Region', 'Survey', 'LoadOrder'])
 
         
         for region in self.plot_poly_dict.keys():
-
+            print region
             region_data = dataFrame.query('Region=="{0}"'.format(region))
-
+#             print region, region_data
             labels = self._get_Plot_Labels(region_data)
             
             fig_coords = self._get_Fig_Coordinates(fig, ax, self._findSiteLoc(region), boxsize)

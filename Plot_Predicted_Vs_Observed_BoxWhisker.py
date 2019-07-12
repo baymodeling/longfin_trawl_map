@@ -17,7 +17,7 @@ Pred_data = r"C:\git\longfin_trawl_map\lfsmelt_2013_5mm_18mm_max_0.20grow\lfsmel
 Obs_Label = 'Test_Observed'
 Pred_Label = 'Test_Predicted'
 output_directory = r'Test_Directory'
-fishtype = 'Delta Smelt'
+fishtype = 'test Smelt'
 surveys = [1,2,3,4,5,6]
 cohorts = [1,2,3,4,5,6]
  

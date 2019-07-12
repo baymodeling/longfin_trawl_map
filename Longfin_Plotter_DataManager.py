@@ -1156,7 +1156,7 @@ class DataManager(object):
         DataFrame = self._connect_Sources(DataFrame)
         self._add_Dates(DataFrame)
             
-    def Coordinate_Data(self, Predicted_Data, Observed_Data, datatype=None, Survey=None):   
+    def Coordinate_Data(self, Predicted_Data, Observed_Data, datatype=None, Survey=None, hatching_period=None):   
         '''
         Gets the correct predicted time series data from Computed data excel files. 
         Observed forms give daily values for q5, q25, q50, q75, and q95 regional values.
@@ -1170,8 +1170,12 @@ class DataManager(object):
         Valid = []
         Predicted_Data['Survey'] = ''
         for obs_index, row in Observed_Data.iterrows():
-            valid_idx = [r for r, DFrow in Predicted_Data.iterrows() if DFrow['Date'] == row['Date'] 
-                         and DFrow['Region'] == row['Region']]
+            if hatching_period == None:
+                valid_idx = [r for r, DFrow in Predicted_Data.iterrows() if DFrow['Date'] == row['Date'] 
+                             and DFrow['Region'] == row['Region']]
+            else:
+                valid_idx = [r for r, DFrow in Predicted_Data.iterrows() if DFrow['Date'] == row['Date'] + dt.timedelta(days=hatching_period) 
+                             and DFrow['Region'] == row['Region']]
             Valid += valid_idx
             for i in valid_idx:
                 Predicted_Data.ix[i,'Survey'] = row['Survey']
