@@ -46,6 +46,7 @@ class LongfinPlotter(object):
                  sizes=None,
                  surveys=None,
                  cohorts=None,
+                 hatching_period=None,
                  title='',
                  output_directory=''):
         
@@ -53,6 +54,7 @@ class LongfinPlotter(object):
         self.Sizes = sizes
         self.Surveys = surveys 
         self.Cohorts = cohorts
+        self.hatching_period = hatching_period
         self.output_directory = output_directory
         self.Map_Utils = LongfinMap(run_dir, grd_file, self.Year, self.Sizes, self.Cohorts, self.Surveys, title=title) #Create map class object
 #         self.Map_Utils.Total_Groups = self.Groups
@@ -113,8 +115,9 @@ class LongfinPlotter(object):
         bar_data.apply_Growth(GrowthRate)
         bar_data.apply_Chronological(Chronological)
         data = bar_data.get_DataFrame()
-        self.Map_Utils.plot_bars(data, Var, GrowthRate, Chronological, Log, Fishtype, startDate, max=max)
-        self.Map_Utils.savePlot(Var)
+        self.Map_Utils.plot_bars(data, Var, GrowthRate, Chronological, Log, 
+                                 Fishtype, startDate, max=max)
+        self.Map_Utils.savePlot(Var, self.output_directory)
         
     
     
@@ -163,7 +166,7 @@ class LongfinPlotter(object):
         dataframe = bw_data.get_DataFrame()
         dataframe = bw_data.Organize_Data(dataframe, datatype)
         self.Map_Utils.plot_boxwhisker(dataframe, Var, Chronological, Log, Fishtype, datatype=datatype, max=max)
-        self.Map_Utils.savePlot(Var)
+        self.Map_Utils.savePlot(Var, self.output_directory)
     
     
     def make_PredvsObs_BoxWhisker(self,
@@ -210,9 +213,6 @@ class LongfinPlotter(object):
     
         print 'Reading in Observed File...'
         
-#         hatching_period = 15
-        hatching_period = 0
-        
         if Obs_Label==None and Pred_Label == None:
             inputs = self.get_inputs('PVO')
             Obs_Label = inputs['PVO_Obs_Label']
@@ -234,8 +234,9 @@ class LongfinPlotter(object):
 
             Obs_data = Obs_data_Manager.get_DataFrame(cohort=cohort)
             Pred_data = Pred_data_Manager.get_DataFrame(cohort=cohort)
-            dataframe = Pred_data_Manager.Coordinate_Data(Pred_data, Obs_data, hatching_period=hatching_period)
-            dataframe = Pred_data_Manager.Filter_by_HatchDate(dataframe)
+            dataframe = Pred_data_Manager.Coordinate_Data(Pred_data, Obs_data)
+            dataframe = Pred_data_Manager.Filter_by_HatchDate(dataframe,
+                        hatching_period=self.hatching_period)
             self.Map_Utils.plot_ObsVsPred_Boxwhisker(dataframe, Var, Chronological, cohort, Log, Fishtype, max=max)
             self.Map_Utils.savePlot(Var, self.output_directory)
             
@@ -309,7 +310,7 @@ class LongfinPlotter(object):
             dataframe = Pred_data_Manager.Coordinate_Data(Pred_data, Obs_data)
             dataframe = Pred_data_Manager.Filter_by_HatchDate(dataframe)
             self.Map_Utils.plot_MultiObsVsPred_Boxwhisker(dataframe, Var, Chronological, cohort, Log, Fishtype, datatype='multi', max=max)
-            self.Map_Utils.savePlot(Var)
+            self.Map_Utils.savePlot(Var, self.output_directory)
 
 
     def make_TotalPredvsObs_BoxWhisker(self,
@@ -320,6 +321,7 @@ class LongfinPlotter(object):
                                        Log=False,
                                        max=0.,
                                        Fishtype='Longfin Smelt',
+                                       cohort_data=True,
                                        Obs_Label=None,
                                        Pred_Label=None):                            
         '''
@@ -373,9 +375,10 @@ class LongfinPlotter(object):
         Obs_data = Obs_data_Manager.get_DataFrame()
         Pred_data = Pred_data_Manager.get_DataFrame()
         dataframe = Pred_data_Manager.Coordinate_Data(Pred_data, Obs_data)
-        dataframe = Pred_data_Manager.Filter_by_HatchDate(dataframe)
+        if cohort_data:
+            dataframe = Pred_data_Manager.Filter_by_HatchDate(dataframe)
         self.Map_Utils.plot_ObsVsPred_Boxwhisker(dataframe, Var, Chronological, 'Total', Log, Fishtype, max=max)
-        self.Map_Utils.savePlot(Var)
+        self.Map_Utils.savePlot(Var, self.output_directory)
         
         
     def make_Cohort_BoxWhisker(self,
@@ -427,7 +430,7 @@ class LongfinPlotter(object):
             bw_data.InitializeData(Trawl_Data)
             data = bw_data.get_DataFrame()
             self.Map_Utils.plot_boxwhisker(data, Var, '', Log, Fishtype, datatype=datatype, cohortNum=cohort, max=max)
-            self.Map_Utils.savePlot(Var)
+            self.Map_Utils.savePlot(Var, self.output_directory)
 
 
     def make_TimeSeries_Plots(self,
@@ -454,12 +457,12 @@ class LongfinPlotter(object):
         Max: set a max value used for plotting. Otherwise use the highest value.
         '''
         data = DataManager(self.Map_Utils.poly_names, self.Year, self.Sizes, 'timeseries', '', 
-                           self.Groups, self.Group_Type)
-        data.InitializeData(Datafile)
+                           self.Cohorts, self.Surveys)
+        data.InitializeData(Datafile, datatype='entrainment', Label='Fractional Entrainment')
         tsdata = data.get_DataFrame()
         date_data = data._get_Timeseries_Dates()
         self.Map_Utils.plot_timeseries(tsdata, Var, date_data, Log, Fishtype, datatype=datatype, max=max)
-        self.Map_Utils.savePlot(Var)
+        self.Map_Utils.savePlot(Var, self.output_directory)
         
 def make_spotCheck_BoxWhisker(self,
                               datafile,
@@ -508,7 +511,7 @@ def make_spotCheck_BoxWhisker(self,
             data_manager.InitializeData(datafile, datatype=datatype)
             data = data_manager.get_DataFrame()
             self.Map_Utils.plot_boxwhisker(data, Var, '', Log, Fishtype, datatype=datatype, cohortNum=cohort, max=max)
-            self.Map_Utils.savePlot(Var)
+            self.Map_Utils.savePlot(Var, self.output_directory)
             
 
 ############################################################################
@@ -525,8 +528,8 @@ if __name__ == '__main__':
     entrainment = False
     PredvsMultiObs = False
     CohortBW = False #UNDER CONSTRUCTION
-    EntrainmentTS = False
-    spotCheck = True
+    EntrainmentTS = True
+    spotCheck = False
     
     if bar:
 #         Var = 'Density'
@@ -649,7 +652,7 @@ if __name__ == '__main__':
         Var = 'Larvae'
         sizes=[]
         cohorts = [1,2,3,4,5,6]
-        entrainment_files = r"C:\git\longfin_trawl_map\4-16-2019\proportional_entrainment.csv"
+        entrainment_files = r"C:\git\longfin_trawl_map\lfsmelt_2013_5mm_18mm_max_0.20grow\lfsmelt_2013_5mm_18mm_max_0.20grow\results\predicted_cohort_source_entrainment_quantiles.csv"
         lfp = LongfinPlotter(run_dir, grd_file, year, sizes, cohorts=cohorts)
         lfp.make_TimeSeries_Plots(entrainment_files, Var, datatype='fractional_entrainment', max=1.)
                              

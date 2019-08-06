@@ -163,7 +163,7 @@ class LongfinMap(object):
             scaler = round(max_val, len_max)
             
         elif self.plotType == 'timeseries':
-            max_val = max(max(DataFrame['Values'].values))
+            max_val = max(DataFrame['q50'].values)
             len_max = (len(str(max_val).split('.')[0]) - 2) * -1
             scaler = round(max_val, len_max)
             
@@ -277,7 +277,8 @@ class LongfinMap(object):
         '''
         Gets the number of days in the dataframe for time series plots
         '''
-        return len(dataFrame['Days'])    
+#         return len(dataFrame['Days'])    
+        return len(dataFrame.Date.unique())
     
     def _get_colors(self):
         
@@ -290,7 +291,7 @@ class LongfinMap(object):
             self.colors = self.colors[:len(self.Sources)]
         else:
             cmap_pars = pylab.cm.get_cmap('spring') #purple to yellow
-            self.colors=[cmap_pars(float(ng)/float(self.Total_Groups)) for ng in range(self.Total_Groups)]
+            self.colors=[cmap_pars(float(ng)/float(self.Cohorts)) for ng in range(self.Total_Groups)]
             
         
     def _make_Legend_Data(self, num_Groups, Plot_Maximum):
@@ -380,6 +381,7 @@ class LongfinMap(object):
                 
         elif self.plotType == 'timeseries':
             xlims = ax.get_xlim()
+            print xlims
             xticks = np.arange(0, xlims[1], (round(xlims[1], -1)/2))
             
         else:
@@ -388,14 +390,18 @@ class LongfinMap(object):
         ax.set_xticks(xticks)
         
         #set up xtick labels
+
+        
         if self.datatype in ['hatch', 'entrainment']:
-            ax.set_xticklabels(Labels,ha='center',fontsize=8)
+            if self.plotType in ['timeseries']:
+                ax.set_xticklabels(Labels,rotation=90,ha='center', fontsize=8)
+            else:
+                ax.set_xticklabels(Labels,ha='center',fontsize=8)
             
         elif self.datatype in [None, 'cohort']:
             ax.set_xticklabels(Labels,rotation=90,ha='center',fontsize=8)
             
-        elif self.datatype in ['fractional_entrainment']:
-            ax.set_xticklabels(Labels,rotation=90,ha='center', fontsize=8)
+
             
         elif self.datatype in ['multi']:
 #             print self.Survey_Nums
@@ -414,10 +420,12 @@ class LongfinMap(object):
             
         #set up additional labels for specific plots
         if self.datatype in ['hatch', 'entrainment']:
-            ax.set_xlabel('Cohort')
-            ax.set_ylabel('Larvae')
-        elif self.datatype in ['fractional_entrainment']:
-            ax.set_ylabel('Fraction Entrained')
+            if self.plotType in ['timeseries']:
+                ax.set_ylabel('Fraction Entrained')
+            else:
+                ax.set_xlabel('Cohort')
+                ax.set_ylabel('Larvae')
+            
         elif self.datatype in ['multi']:
             ax.set_ylabel(Var)
             ax.set_xlabel('Survey')
@@ -598,11 +606,10 @@ class LongfinMap(object):
         that there are many surveys, otherwise the labels get crowded.
         Legend then configured after to be pretty.
         '''
-        
         Groups = self._get_Unique_Groups(DataFrame) #get tuples with group and source for each point of data for labels
         plot_Legend_labels = self._get_Plot_Legend_labels(Groups) #create labels depending on source
         mod = self._get_Legend_size_Modifier(DataFrame, Var) #figure out if we need to expand the legend
-        if self.datatype in ['fractional_entrainment']: #if its a time series plot, make the plot a set size.
+        if self.plotType in ['timeseries']: #if its a time series plot, make the plot a set size.
             boxsize = [15000.,15000.]
             new_xy_leg = [self.xy_leg[0] + (boxsize[1]/2), self.xy_leg[1] - (boxsize[1]/2)]
             fig_coords = self._get_Fig_Coordinates(fig, ax, new_xy_leg, boxsize, mod=mod)
@@ -615,7 +622,7 @@ class LongfinMap(object):
         
         self._add_Legend_Subplot(axb, legend_data, Var)
         
-        if self.datatype in ['fractional_entrainment']:
+        if self.plotType in ['timeseries']:
             #if time series plot, the legend also has additional labels, such as on the right side and different bottom labels. 
             plot_Legenddate_labels = [dates[0].strftime('%d-%b-%Y'), dates[int(len(dates)/2)].strftime('%d-%b-%Y'), dates[-1].strftime('%d-%b-%Y')]
             self._configure_Legend(axb, Plot_maximum, plot_Legenddate_labels, Var)
@@ -726,7 +733,6 @@ class LongfinMap(object):
                 else:
                     bw_pos = list(np.arange(0, len(DataFrame)*1.5))
                     del bw_pos[2::3]
-                    print len(plt_data), len(bw_pos)
                     box1 = ax.bxp(plt_data, positions=bw_pos, showfliers=False, patch_artist=True)
                     for pn, patch in enumerate(box1['boxes']):
                         if pn % 2 == 0:
@@ -805,7 +811,7 @@ class LongfinMap(object):
             leg_labels.append(str(plot_Legend_labels[i]))
         axb2.set_yticks(leg_data)  
         axb2.set_yticklabels(leg_labels)
-        axb2.set_ylabel(self.datatype)
+        axb2.set_ylabel("Cohort")
     
     def _add_SubLegend(self, ax, Labels):
         custom_lines = []
@@ -859,8 +865,13 @@ class LongfinMap(object):
                         
         elif self.plotType == 'timeseries':
             formatted_data = []
-            for i, tsdata in enumerate(data['Values'].values):
-                formatted_data.append(tsdata)
+            cohorts = data.Cohort.unique()
+            for cohort in cohorts:
+                cohort_data_list = []
+                cohort_data = data.query('Cohort=={0}'.format(cohort))
+                for i, tsdata in enumerate(cohort_data['q50'].values):
+                    cohort_data_list.append(tsdata)
+                formatted_data.append(cohort_data_list)
                         
         return formatted_data
                      
@@ -884,9 +895,10 @@ class LongfinMap(object):
         if self.datatype == 'hatch':
             title = '{0} Hatching {1}: {2}'.format(self.Fishtype,self.Year,self.title_str)
         elif self.datatype == 'entrainment':
-            title = '{0} Entrainment {1}: {2}'.format(self.Fishtype,self.Year,self.title_str)
-        elif self.datatype == 'fractional_entrainment':
-            title = '{0} Fractional Entrainment'.format(self.Fishtype)
+            if self.plotType == 'timeseries':
+                title = '{0} Fractional Entrainment: {1}'.format(self.Fishtype, self.title_str)
+            else:
+                title = '{0} Entrainment {1}: {2}'.format(self.Fishtype,self.Year,self.title_str)
         elif self.datatype == 'cohort':
             title = '{0} Cohort {1}'.format(self.Fishtype, self.Cohort_Number)
         elif self.compare:
@@ -948,7 +960,8 @@ class LongfinMap(object):
         if self.Log:
             filename += '_Log'
         self.filename = os.path.join(output_dir, '{0}.png'.format(filename))
-        plt.savefig(self.filename, dpi=900, facecolor='white',bbox_inches='tight')
+        plt.savefig(self.filename, dpi=600, facecolor='white',bbox_inches='tight')
+        #plt.savefig(self.filename, dpi=600, facecolor='white')
         plt.close()
         plt.clf()
         
@@ -1087,13 +1100,15 @@ class LongfinMap(object):
         else:
             Plot_maximum = self._get_Plot_Scale(dataFrame, Var)
         
-        dataFrame = dataFrame.sort_values(by=['Region', 'Survey', 'LoadOrder'])
+        dataFrame = dataFrame.sort_values(by=['Region', 'Survey'])
 
         
+        #pylab.ion()
+        #fig.show()
         for region in self.plot_poly_dict.keys():
-            print region
+
             region_data = dataFrame.query('Region=="{0}"'.format(region))
-#             print region, region_data
+
             labels = self._get_Plot_Labels(region_data)
             
             fig_coords = self._get_Fig_Coordinates(fig, ax, self._findSiteLoc(region), boxsize)
@@ -1160,6 +1175,7 @@ class LongfinMap(object):
         self.plotType = 'timeseries'
         self.datatype = datatype
         self.Fishtype = Fishtype
+        self.Total_Groups = len(dataFrame.Cohort.unique())
         boxsize = [10000.,10000.] #Check this
         self.numdays = self._getNumdays(dataFrame)
         ax, fig = self._create_Plot(Var)
@@ -1168,14 +1184,15 @@ class LongfinMap(object):
             Plot_maximum = max
         else:
             Plot_maximum = self._get_Plot_Scale(dataFrame, Var)
-        
-        dataFrame = dataFrame.sort_values(by=['Region', 'Group'])
+        print Plot_maximum
+        dataFrame = dataFrame.sort_values(by=['Region', 'Cohort', 'Date'])
 
         
         for region in self.plot_poly_dict.keys():
 
             region_data = dataFrame.query('Region=="{0}"'.format(region))
-            regionCheck = self._regionCheck(region_data['Values'].values)
+            print region
+            regionCheck = self._regionCheck(region_data['q50'].values)
             if regionCheck:
 #                 labels = self._get_Plot_Labels(region_data)
                 
@@ -1186,7 +1203,7 @@ class LongfinMap(object):
                 fig.canvas.draw()
             
         
-        self._add_Legend(fig, ax, boxsize, region_data, Var, Plot_maximum, dates=date_data)
+        self._add_Legend(fig, ax, boxsize, dataFrame, Var, Plot_maximum, dates=date_data)
           
         
         

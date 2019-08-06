@@ -9,6 +9,7 @@ import pandas as pd
 import numpy as np
 import datetime as dt
 import math
+import pdb
     
 class DataManager(object):
     '''
@@ -50,7 +51,8 @@ class DataManager(object):
         elif self.plottype == 'boxwhisker':
             self.mainDataFrame = pd.DataFrame(columns=['Region', 'Source', 'LoadOrder', 'q5', 'q25', 'q50', 'q75', 'q95']) 
         elif self.plottype == 'timeseries':
-            self.mainDataFrame = pd.DataFrame(columns=['Region', 'Source', 'LoadOrder', 'Values', 'Days'])
+            self.mainDataFrame = pd.DataFrame(columns=['Region', 'Source', 'LoadOrder', 'q5', 'q25', 'q50', 'q75', 'q95']) 
+#             self.mainDataFrame = pd.DataFrame(columns=['Region', 'Source', 'LoadOrder', 'Values', 'Days'])
         print 'Main Data Frame initialized...'
         
     def _append_mainDataframe(self, **kwargs):
@@ -220,7 +222,7 @@ class DataManager(object):
                 
         return header
     
-    def _get_Region_Stats(self, Region, Survey, Cohort, Sizes=[0,0], datatype=None):     
+    def _get_Region_Stats(self, Region, Survey, datatype=None):     
         '''
         For a specific dataset, finds and calculates the density and abundance and starttime of 
         a specific region and group
@@ -334,12 +336,12 @@ class DataManager(object):
             
         elif self.plottype == 'timeseries':
             region_idx = self._get_Valid_Idx(Region, 'region', contain=True)
-            Group_Idx = self._get_Valid_Idx(Group, GroupType, Filter=region_idx, contain=True)
+            Survey_Idx = self._get_Valid_Idx(Survey, Survey, Filter=region_idx, contain=True)
 
             for i, (label, content) in enumerate(self.Data.iteritems()):
-                if i in Group_Idx:
+                if i in Survey_Idx:
                     region = '_'.join(label.split('_')[:-1])
-                    Group = label.split('_')[-1]
+                    Survey = label.split('_')[-1]
                     data = content.tolist()
                     
                     return data
@@ -593,15 +595,20 @@ class DataManager(object):
         '''
         Gets dates from timeseries file and turns them into dt objects
         '''
-        converted_datestr = []
-        for date in self.Data['date_string'].tolist():
-            try:
-                date_string = dt.datetime(1970,1,1) + dt.timedelta(days=int(date))
-            except KeyError:
-                date_string = dt.datetime(1970,1,1)
-            converted_datestr.append(date_string)
+#         converted_datestr = []
+#         for date in self.Data['date_string'].tolist():
+#             try:
+#                 date_string = dt.datetime(1970,1,1) + dt.timedelta(days=int(date))
+#             except KeyError:
+#                 date_string = dt.datetime(1970,1,1)
+#             converted_datestr.append(date_string)
+        total_Dates = []
+        dates = self.mainDataFrame.Date.unique()
+        for date in dates:
+            total_Dates.append(dt.datetime.utcfromtimestamp(date.astype('O')/1e9))
+    
         
-        return converted_datestr
+        return total_Dates
     
 
     def _getLabels(self):
@@ -1024,6 +1031,7 @@ class DataManager(object):
                 self._merge_with_mainDataFrame(df)
             self.mainDataFrame = self.mainDataFrame.reset_index(drop=True)
             
+            
         else:
             if self.plottype == 'boxwhisker':
                 df = self._get_Stats(datatype=datatype)
@@ -1033,7 +1041,13 @@ class DataManager(object):
                 else:
                     df['LoadOrder'] = load_order + 1
                 self._merge_with_mainDataFrame(df)
+            elif self.plottype == 'timeseries':
+                df = self._get_Stats(datatype=datatype)
+                df['Source'] = os.path.basename(data).split('.')[0]
+                self._merge_with_mainDataFrame(df)
             self.mainDataFrame = self.mainDataFrame.reset_index(drop=True)
+        
+        
             
 
 #         elif datatype == None:
@@ -1069,9 +1083,11 @@ class DataManager(object):
 #         else:
 #             self.Surveys = self._check_groupingLength(len_data, self.Surveys)
        
-        if datatype in ['total_predicted', 'total_observed', 'predicted', 'observed', 'entrainment', 'hatch']:
+        if datatype in ['total_predicted', 'total_observed', 'predicted', 'observed', 'entrainment', 'hatch', 'timeseries']:
             for i, data_Source in enumerate(data):
                 if self.plottype == 'boxwhisker':
+                    self.add_Dataset(data_Source, i,  datatype=datatype)
+                elif self.plottype == 'timeseries':
                     self.add_Dataset(data_Source, i,  datatype=datatype)
                 elif self.plottype == 'bar':
                     print '{0} Dataset Bar plots not yet implemented.'.format(datatype)
@@ -1156,7 +1172,7 @@ class DataManager(object):
         DataFrame = self._connect_Sources(DataFrame)
         self._add_Dates(DataFrame)
             
-    def Coordinate_Data(self, Predicted_Data, Observed_Data, datatype=None, Survey=None, hatching_period=None):   
+    def Coordinate_Data(self, Predicted_Data, Observed_Data, datatype=None, Survey=None):   
         '''
         Gets the correct predicted time series data from Computed data excel files. 
         Observed forms give daily values for q5, q25, q50, q75, and q95 regional values.
@@ -1170,12 +1186,8 @@ class DataManager(object):
         Valid = []
         Predicted_Data['Survey'] = ''
         for obs_index, row in Observed_Data.iterrows():
-            if hatching_period == None:
-                valid_idx = [r for r, DFrow in Predicted_Data.iterrows() if DFrow['Date'] == row['Date'] 
-                             and DFrow['Region'] == row['Region']]
-            else:
-                valid_idx = [r for r, DFrow in Predicted_Data.iterrows() if DFrow['Date'] == row['Date'] + dt.timedelta(days=hatching_period) 
-                             and DFrow['Region'] == row['Region']]
+            valid_idx = [r for r, DFrow in Predicted_Data.iterrows() if DFrow['Date'] == row['Date'] 
+                         and DFrow['Region'] == row['Region']]
             Valid += valid_idx
             for i in valid_idx:
                 Predicted_Data.ix[i,'Survey'] = row['Survey']
@@ -1280,14 +1292,20 @@ class DataManager(object):
                 dataframe.drop(i, inplace=True)
         return dataframe
     
-    def Filter_by_HatchDate(self, dataframe):
+    def Filter_by_HatchDate(self, dataframe, hatching_period=None):
         hatchdate = dataframe.Hatchstart.unique()
         if len(hatchdate) > 1:
             print 'Number of hatchdates for Cohort {0} exceeds 1.'
             print 'Please check data and try again.'
             sys.exit(0)
         for i, row in dataframe.iterrows():
-            if row['Date'] < hatchdate[0]:
+            if hatching_period is None:
+                end_hatching = hatchdate[0]
+            else:
+                dt_hatch = np.timedelta64(hatching_period,'D')
+                end_hatching = hatchdate[0] + dt_hatch
+            #if row['Date'] < hatchdate[0]:
+            if row['Date'] < end_hatching:
                 dataframe.drop(i, inplace=True)
         return dataframe
     
